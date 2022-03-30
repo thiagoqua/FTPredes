@@ -1,0 +1,1 @@
+#define QUIT 30
