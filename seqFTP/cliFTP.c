@@ -83,7 +83,7 @@ int autentication(int fhs){
         printf("** fallo en la recepcion de la respuesta del servidor **\n");
         return -1;
     }
-    printf("\n\n%spassword: ",buffer);
+    printf("\n%s\npassword: ",buffer);
     scanf("%s",input);
     memset(buffer,0,sizeof(buffer));
     sprintf(buffer,"PASS %s\r\n",input);

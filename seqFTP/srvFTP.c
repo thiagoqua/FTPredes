@@ -10,8 +10,10 @@
 
 #define VERSION "1.0"
 #define IP "127.0.0.25"
+#define NOF "accesses/ftpusers.txt"                    //NAME OF FILE
 
 int autentication(int);
+int validate(char[],char[]);
 
 int main(int argc,char *args[]){
     if(argc != 2){
@@ -50,8 +52,7 @@ int main(int argc,char *args[]){
         return -5;
     }
     if(autentication(fhc) < 0){
-        close(fhc);
-        close(fhs);
+        close(fhs);//esto se tiene que ir
         return -6;
     }
     while(1){                                           //gestion de las peticiones
@@ -61,7 +62,6 @@ int main(int argc,char *args[]){
             return -7;
         }
         strncpy(cmd,buffer,(size_t)4);
-        cmd[4] = '\0';                                  //esto es porque strncpy no pone caracteres de fin de linea en este0o
         switch(str2cmd(cmd)){
             case QUIT:
                 memset(buffer,0,sizeof(buffer));
@@ -79,15 +79,15 @@ int main(int argc,char *args[]){
 return 0;}
 
 int autentication(int fhc){
-    char buffer[BUFFLEN] = {0},cmd[4] = {0},user[AUTLEN] = {0},pass[AUTLEN] = {0};
+    char buffer[BUFFLEN] = {0},cmd[5] = {0},user[AUTLEN] = {0},pass[AUTLEN] = {0},aux[AUTLEN] = {0};
     if(read(fhc,buffer,sizeof(buffer)) < 0){            //recibo usuario
         printf("** fallo la lectura del comando enviado por el cliente **\n");
         return -1;
     }
     strncpy(cmd,buffer,(size_t)4);                      //obtengo el comando del buffer
-    cmd[4] = 0;
     if(str2cmd(cmd) == USER){
-        strncpy(user,buffer + 5,(size_t)BUFFLEN); //obtengo el usuario
+        strncpy(aux,buffer + 5,(size_t)BUFFLEN);        //obtengo el usuario
+        strcpy(user,strtok(aux,"\r\n"));                //le saco los escapes
         memset(buffer,0,sizeof(buffer));
         sprintf(buffer,"%d Password required for %s\r\n",PASREQ,user);
         if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de requerimiento de password
@@ -101,15 +101,56 @@ int autentication(int fhc){
         }
         memset(cmd,0,sizeof(cmd));
         strncpy(cmd,buffer,(size_t)4);
-        cmd[4] = 0;
         if(str2cmd(cmd) == PASS){
-            strncpy(pass,buffer + 5,(size_t)BUFFLEN); //obtengo la contraseña
+            strncpy(aux,buffer + 5,(size_t)BUFFLEN);       //obtengo la contraseña
+            strcpy(pass,strtok(aux,"\r\n"));
         } else {
             printf("** comando invalido **\n");
             return -1;
+        }
+        memset(buffer,0,sizeof(buffer));
+        //actuo segun los datos obtenidos
+        printf("antes de validate = %s.\n",user);
+        if(validate(user,pass) < 0){
+            sprintf(buffer,"%d Login incorrect\r\n",LOGUNS);
+            if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de error
+                printf("** fallo el enviado del mensaje al cliente **\n");
+                return -1;
+            }
+            close(fhc);
+            return -1;
+        } else {
+            sprintf(buffer,"%d User %s logged in\r\n",LOGSUC,user);
+            if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de error
+                printf("** fallo el enviado del mensaje al cliente **\n");
+                return -1;
+            }
         }
     } else {
         printf("** comando invalido **\n");
         return -1;
     }
 return 0;}
+
+int validate(char user[],char pass[]){
+    FILE *archivito = fopen(NOF,"r");
+    char read[AUTLEN + 1] = {0},aux[AUTLEN] = {0};
+    if(archivito == NULL){
+        printf("** error al abrir el archivo **\n");
+        return -1;
+    }
+    //realizo el proceso de busqueda
+    while(fscanf(archivito,"%[^:]",read) != EOF){
+        printf("leido es %s. y user es %s.\n",read,user);
+        if(strcmp(read,user) == 0){
+            memset(read,0,sizeof(read));
+            fscanf(archivito,"%s",read);
+            strcpy(aux,read + 1);                           //porque read[1] == ":"
+            printf("password limpia leida = %s\n",aux);
+            exit(-1);
+        }
+        fscanf(archivito,"%s",read);                        //avanzo al puntero hacia la siguiente linea
+        memset(read,0,sizeof(read));
+    }
+    fclose(archivito);
+return -1;}
