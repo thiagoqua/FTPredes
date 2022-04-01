@@ -12,6 +12,7 @@
 #define IP "127.0.0.25"
 #define NOF "accesses/ftpusers.txt"                    //NAME OF FILE
 
+int buff2cmd(char[]);
 int autentication(int);
 int validate(char[],char[]);
 
@@ -22,7 +23,7 @@ int main(int argc,char *args[]){
     }
     int fhs,fhc,addrlen,port;
     struct sockaddr_in address;
-    char buffer[BUFFLEN] = {0},cmd[4] = {0};
+    char buffer[BUFFLEN] = {0},cmd[5] = {0};
     port = atoi(args[1]);
     //conexion con cliente
     address.sin_family = AF_INET;
@@ -62,7 +63,7 @@ int main(int argc,char *args[]){
             return -7;
         }
         strncpy(cmd,buffer,(size_t)4);
-        switch(str2cmd(cmd)){
+        switch(buff2cmd(cmd)){
             case QUIT:
                 memset(buffer,0,sizeof(buffer));
                 sprintf(buffer,"%d Goodbye.\r\n",CONFIN);
@@ -78,6 +79,15 @@ int main(int argc,char *args[]){
     }
 return 0;}
 
+int buff2cmd(char str[]){
+    if(strcmp(str,"USER") == 0)
+        return USER;
+    else if(strcmp(str,"PASS") == 0)
+        return PASS;
+    else if(strcmp(str,"QUIT") == 0)
+        return QUIT;
+return -1;}
+
 int autentication(int fhc){
     char buffer[BUFFLEN] = {0},cmd[5] = {0},user[AUTLEN] = {0},pass[AUTLEN] = {0},aux[AUTLEN] = {0};
     if(read(fhc,buffer,sizeof(buffer)) < 0){            //recibo usuario
@@ -85,7 +95,7 @@ int autentication(int fhc){
         return -1;
     }
     strncpy(cmd,buffer,(size_t)4);                      //obtengo el comando del buffer
-    if(str2cmd(cmd) == USER){
+    if(buff2cmd(cmd) == USER){
         strncpy(aux,buffer + 5,(size_t)BUFFLEN);        //obtengo el usuario
         strcpy(user,strtok(aux,"\r\n"));                //le saco los escapes
         memset(buffer,0,sizeof(buffer));
@@ -101,7 +111,7 @@ int autentication(int fhc){
         }
         memset(cmd,0,sizeof(cmd));
         strncpy(cmd,buffer,(size_t)4);
-        if(str2cmd(cmd) == PASS){
+        if(buff2cmd(cmd) == PASS){
             strncpy(aux,buffer + 5,(size_t)BUFFLEN);       //obtengo la contraseña
             strcpy(pass,strtok(aux,"\r\n"));
         } else {
@@ -110,7 +120,6 @@ int autentication(int fhc){
         }
         memset(buffer,0,sizeof(buffer));
         //actuo segun los datos obtenidos
-        printf("antes de validate = %s.\n",user);
         if(validate(user,pass) < 0){
             sprintf(buffer,"%d Login incorrect\r\n",LOGUNS);
             if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de error
@@ -141,15 +150,17 @@ int validate(char user[],char pass[]){
     }
     //realizo el proceso de busqueda
     while(fscanf(archivito,"%[^:]",read) != EOF){
-        printf("leido es %s. y user es %s.\n",read,user);
         if(strcmp(read,user) == 0){
             memset(read,0,sizeof(read));
             fscanf(archivito,"%s",read);
             strcpy(aux,read + 1);                           //porque read[1] == ":"
-            printf("password limpia leida = %s\n",aux);
-            exit(-1);
+            if(strcmp(aux,pass) == 0)
+                return 0;
+            else
+                return -1;
         }
-        fscanf(archivito,"%s",read);                        //avanzo al puntero hacia la siguiente linea
+        fscanf(archivito,"%s",read);                        //avanzo al puntero hacia el fin de línea
+        fseek(archivito,1,SEEK_CUR);                        //avanzo al puntero una posición para que se posicione en la línea siguiente
         memset(read,0,sizeof(read));
     }
     fclose(archivito);

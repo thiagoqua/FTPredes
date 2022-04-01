@@ -6,6 +6,7 @@
 #include<unistd.h>
 #include"cmds.h"
 
+int input2cmd(char[]);
 int autentication(int);
 
 int main(int argc,char *args[]){
@@ -44,7 +45,7 @@ int main(int argc,char *args[]){
         printf("operación: ");
         scanf("%s",input);
         strncpy(cmd,input,(size_t)4);
-        switch(str2cmd(cmd)){
+        switch(input2cmd(cmd)){
             case QUIT:
                 strcpy(buffer,"QUIT\r\n");
                 if(write(fhs,buffer,sizeof(buffer)) < 0){
@@ -56,7 +57,7 @@ int main(int argc,char *args[]){
                     printf("** fallo en la recepcion de la respuesta del servidor **\n");
                     return -7;
                 }
-                printf("%s",buffer);
+                printf("\n%s\n",buffer);
                 close(fhs);
                 return 0;
             break;
@@ -66,6 +67,11 @@ int main(int argc,char *args[]){
         }
     }
 return 0;}
+
+int input2cmd(char str[]){
+    if(strcmp(str,"quit") == 0)
+        return QUIT;
+return -1;}
 
 int autentication(int fhs){
     int retcode;

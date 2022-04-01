@@ -13,14 +13,3 @@
 //MACROS EXTRA
 #define BUFFLEN 50              //longiud del buffer
 #define AUTLEN 20               //longitud de los arreglos de autenticacion
-
-int str2cmd(char str[]);
-
-int str2cmd(char str[]){
-    if(strcmp(str,"USER") == 0)
-        return USER;
-    else if(strcmp(str,"PASS") == 0)
-        return PASS;
-    else if(strcmp(str,"QUIT") == 0)
-        return QUIT;
-return -1;}
