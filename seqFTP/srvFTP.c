@@ -10,7 +10,7 @@
 
 #define VERSION "1.0"
 #define IP "127.0.0.25"
-#define NOF "accesses/ftpusers.txt"                    //NAME OF FILE
+#define NOFACC "accesses/ftpusers.txt"                    //NAME OF FILE ACCESS
 
 int buff2cmd(char[]);
 int autentication(int);
@@ -142,7 +142,7 @@ int autentication(int fhc){
 return 0;}
 
 int validate(char user[],char pass[]){
-    FILE *archivito = fopen(NOF,"r");
+    FILE *archivito = fopen(NOFACC,"r");
     char read[AUTLEN + 1] = {0},aux[AUTLEN] = {0};
     if(archivito == NULL){
         printf("** error al abrir el archivo **\n");

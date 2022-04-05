@@ -16,7 +16,7 @@ int main(int argc,char *args[]){
     }
     int fhs,port,saddrlen;
     struct sockaddr_in saddress;
-    char buffer[BUFFLEN] = {0},input[BUFFLEN] = {0},cmd[4] = {0};
+    char buffer[BUFFLEN] = {0},input[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0};
     //conexion con servidor
     port = atoi(args[2]);
     saddrlen = sizeof(saddress);
@@ -61,6 +61,11 @@ int main(int argc,char *args[]){
                 close(fhs);
                 return 0;
             break;
+            case GET:
+                strcpy(nof,input + 4);
+                printf("nombre de archivo es '%s'",nof);
+                //close(fhs);
+            break;
             default:
                 printf("\n* operación incorrecta. reingrese *\n\n");
             break;
@@ -69,8 +74,11 @@ int main(int argc,char *args[]){
 return 0;}
 
 int input2cmd(char str[]){
+    int ret;
     if(strcmp(str,"quit") == 0)
         return QUIT;
+    else if((ret = strcmp(str,"get")) == 0 || ret == -32)
+        return GET;
 return -1;}
 
 int autentication(int fhs){

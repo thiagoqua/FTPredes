@@ -2,6 +2,7 @@
 #define QUIT 69
 #define USER 70
 #define PASS 71
+#define GET  72
 
 //CODIGOS DE RESPUESTA DEL SERVIDOR
 #define CONSUC 220              //CONNECTION SUCCESSFULL
@@ -13,3 +14,4 @@
 //MACROS EXTRA
 #define BUFFLEN 50              //longiud del buffer
 #define AUTLEN 20               //longitud de los arreglos de autenticacion
+#define NOFLEN 13               //longitud del nombre del archivo para pasar
