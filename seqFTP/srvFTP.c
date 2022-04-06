@@ -8,13 +8,15 @@
 #include<string.h>
 #include"cmds.h"
 
-#define VERSION "1.0"
-#define IP "127.0.0.25"
-#define NOFACC "accesses/ftpusers.txt"                    //NAME OF FILE ACCESS
+#define VERSION     "1.0"
+#define IP          "127.0.0.25"
+#define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS
+#define SOURCEFILES "srvFiles/"                 //DIRECTORIO DONDE ESTAN LOS ARCHIVOS PARA TRANSFERIR                     
 
 int buff2cmd(char[]);
 int autentication(int);
 int validate(char[],char[]);
+long int fsize(char[]);
 
 int main(int argc,char *args[]){
     if(argc != 2){
@@ -22,8 +24,9 @@ int main(int argc,char *args[]){
         exit(1);
     }
     int fhs,fhc,addrlen,port;
+    long int filesz;
     struct sockaddr_in address;
-    char buffer[BUFFLEN] = {0},cmd[5] = {0};
+    char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0};
     port = atoi(args[1]);
     //conexion con cliente
     address.sin_family = AF_INET;
@@ -75,6 +78,26 @@ int main(int argc,char *args[]){
                 close(fhs);
                 return 0;
             break;
+            case RETR:
+                strcpy(nof,buffer + 5);
+                strtok(nof,"\r\n");
+                memset(buffer,0,sizeof(buffer));
+                if((filesz = fsize(nof)) < 0){
+                    sprintf(buffer,"%d %s: no such file or directory\r\n",FILENF,nof);
+                    if(write(fhc,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo el envio de la respuesta al cliente **\n");
+                        return -9;
+                    }
+                }
+                else{
+                    sprintf(buffer,"%d file %s size %ld Bytes\r\n",FILEFO,nof,filesz);
+                    if(write(fhc,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo el envio de la respuesta al cliente **\n");
+                        return -10;
+                    }
+                    //PASAR AL ENVIADO DEL ARCHIVO
+                }
+            break;
         }
     }
 return 0;}
@@ -86,6 +109,8 @@ int buff2cmd(char str[]){
         return PASS;
     else if(strcmp(str,"QUIT") == 0)
         return QUIT;
+    else if(strcmp(str,"RETR") == 0)
+        return RETR;
 return -1;}
 
 int autentication(int fhc){
@@ -142,7 +167,7 @@ int autentication(int fhc){
 return 0;}
 
 int validate(char user[],char pass[]){
-    FILE *archivito = fopen(NOFACC,"r");
+    FILE *archivito = fopen(NOFACCESS");
     char read[AUTLEN + 1] = {0},aux[AUTLEN] = {0};
     if(archivito == NULL){
         printf("** error al abrir el archivo **\n");
@@ -165,3 +190,16 @@ int validate(char user[],char pass[]){
     }
     fclose(archivito);
 return -1;}
+
+long int fsize(char nof[]){
+    FILE *archivito;
+    int pathlen = strlen(SOURCEFILES) + strlen(nof);
+    char path[pathlen];
+    long int sz;
+    sprintf(path,"%s%s",SOURCEFILES,nof);
+    archivito = fopen(path,"r");
+    if(archivito == NULL)
+        return -1;
+    fseek(archivito,0L,SEEK_END);
+    sz = ftell(archivito);
+return sz;}
