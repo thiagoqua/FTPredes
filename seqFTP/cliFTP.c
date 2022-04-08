@@ -8,8 +8,8 @@
 
 #define DESTFILES   "cliFiles/"                 //DIRECTORIO DONDE SE VAN A ALMACENAR LOS ARCHIVOS TRANSFERIDOS
 
-int input2cmd(char[]);
-int autentication(int);
+int input2cmd(char[]);                          //extrae el comando de lo ingresado por el usuario
+int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
 
 int main(int argc,char *args[]){
     if(argc != 3){

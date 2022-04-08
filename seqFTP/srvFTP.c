@@ -13,10 +13,10 @@
 #define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS
 #define SOURCEFILES "srvFiles/"                 //DIRECTORIO DONDE ESTAN LOS ARCHIVOS PARA TRANSFERIR                     
 
-int buff2cmd(char[]);
-int autentication(int);
-int validate(char[],char[]);
-long int fsize(char[]);
+int buff2cmd(char[]);                           //extrae el comando del buffer leido
+int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
+int validate(char[],char[]);                    //valida que el user y la psw estén en el archivo de acceso
+long int fsize(char[]);                         //deuelve el tamaño del archivo solicitado
 
 int main(int argc,char *args[]){
     if(argc != 2){
@@ -167,7 +167,7 @@ int autentication(int fhc){
 return 0;}
 
 int validate(char user[],char pass[]){
-    FILE *archivito = fopen(NOFACCESS");
+    FILE *archivito = fopen(NOFACCESS,"r");
     char read[AUTLEN + 1] = {0},aux[AUTLEN] = {0};
     if(archivito == NULL){
         printf("** error al abrir el archivo **\n");
@@ -202,4 +202,5 @@ long int fsize(char nof[]){
         return -1;
     fseek(archivito,0L,SEEK_END);
     sz = ftell(archivito);
+    fclose(archivito);
 return sz;}
