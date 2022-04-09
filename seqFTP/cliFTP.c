@@ -44,10 +44,19 @@ int main(int argc,char *args[]){
     faddrlen = sizeof(faddress);
     if(bind(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
         //cambio el puerto
-        faddress.sin_port = htons(0);
+        port = 0;
+        faddress.sin_port = htons(port);
+        faddrlen = sizeof(faddress);
         if(bind(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
+            //si falló ahora es porque hay otro error y aborto
             printf("** fallo el bind post cambiado de puerto **\n");
             return -35;
+        }
+        //aviso al servidor del cambio
+        sprintf(buffer,"PORT %d\r\n",ntohs(faddress.sin_port));
+        if(write(fhs,buffer,sizeof(buffer)) < 0){
+            printf("** fallo el enviado del comando **\n");
+            return -36;
         }
     }
     if(listen(fhfs,3) < 0){
@@ -62,6 +71,7 @@ int main(int argc,char *args[]){
         printf("servidor con ip '%s' conectado\n",inet_ntoa(faddress.sin_addr));
     #endif
     //interacciones entre cliente y servidor
+    memset(buffer,0,sizeof(buffer));
     if(read(fhs,buffer,sizeof(buffer)) < 0){
         printf("** fallo la recepcion del mensaje **\n");
         return -6;

@@ -26,7 +26,7 @@ int main(int argc,char *args[]){
     int fhs,fhc,fhfs,caddrlen,faddrlen,port;
     long int filesz;
     struct sockaddr_in caddress,faddress;
-    char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0};
+    char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},aux[10] = {0};
     port = atoi(args[1]);
     //conexion con cliente mediante socket de comandos
     caddress.sin_family = AF_INET;
@@ -60,10 +60,28 @@ int main(int argc,char *args[]){
         return -6;
     }
     if(connect(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
-        printf("** fallo el connect de transferencia **\nerrno = %d\n",errno);
-        return -7;
+        //checkeo si el cliente me mando un cambio de puerto
+        if(read(fhc,buffer,sizeof(buffer)) < 0){
+            printf("** fallo la lectura del comando enviado por el cliente **\n");
+            return -34;
+        }
+        strncpy(cmd,buffer,(size_t)4);
+        if(buff2cmd(cmd) == PORT){
+            strcpy(aux,buffer + 5);
+            strtok(aux,"\r\n");
+            port = atoi(aux);
+            faddress.sin_port = htons(port);
+            faddrlen = sizeof(faddress);
+        }
+        //si falla ahora es porque hay otro error y aborto
+        if(connect(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
+            printf("** fallo el connect de transferencia post cambio de puerto **\nerrno = %d\n",errno);
+            return -35;
+        }
     }
     //interaccion entre servidor-cliente
+    memset(buffer,0,sizeof(buffer));
+    memset(cmd,0,sizeof(cmd));
     sprintf(buffer,"%d %s version %s.\r\n",CONSUC,args[0],VERSION);
     if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de bienvenida
         printf("** fallo el enviado del mensaje de bienvenida **\n");
@@ -103,6 +121,7 @@ int main(int argc,char *args[]){
                         printf("** fallo el envio de la respuesta al cliente **\n");
                         return -12;
                     }
+                    continue;
                 }
                 sprintf(buffer,"%d file %s size %ld Bytes\r\n",FILEFO,nof,filesz);
                 if(write(fhc,buffer,sizeof(buffer)) < 0){
@@ -125,6 +144,8 @@ int buff2cmd(char str[]){
         return QUIT;
     else if(strcmp(str,"RETR") == 0)
         return RETR;
+    else if(strcmp(str,"PORT") == 0)
+        return PORT;
 return -1;}
 
 int autentication(int fhc){

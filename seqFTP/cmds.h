@@ -4,6 +4,7 @@
 #define PASS 71
 #define GET  72
 #define RETR 73
+#define PORT 74
 
 //CODIGOS DE RESPUESTA DEL SERVIDOR
 #define CONSUC 220              //CONNECTION SUCCESSFULL
