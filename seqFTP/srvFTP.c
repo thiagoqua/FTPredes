@@ -9,9 +9,9 @@
 #include"cmds.h"
 
 #define VERSION     "1.0"
-#define IP          "127.0.0.25"
 #define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS
-#define SOURCEFILES "srvFiles/"                 //DIRECTORIO DONDE ESTAN LOS ARCHIVOS PARA TRANSFERIR                     
+#define SOURCEFILES "srvFiles/"                 //DIRECTORIO DONDE ESTAN LOS ARCHIVOS PARA TRANSFERIR      
+#define IP "127.0.0.5"               
 
 int buff2cmd(char[]);                           //extrae el comando del buffer leido
 int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
@@ -21,49 +21,63 @@ long int fsize(char[]);                         //deuelve el tamaño del archivo
 int main(int argc,char *args[]){
     if(argc != 2){
         printf("** cantidad de argumentos incorrecta **\n");
-        exit(1);
-    }
-    int fhs,fhc,addrlen,port;
-    long int filesz;
-    struct sockaddr_in address;
-    char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0};
-    port = atoi(args[1]);
-    //conexion con cliente
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = inet_addr(IP);
-    address.sin_port = htons(port);
-    addrlen = sizeof(address);
-    if((fhs = socket(AF_INET,SOCK_STREAM,0)) < 0){
-        printf("** fallo en la creacion del socket **\n");
         return -1;
     }
-    if(bind(fhs,(struct sockaddr*)&address,(socklen_t)addrlen) < 0){
-        printf("** fallo el bind **\ncodigo de error %d.\n",errno);
+    int fhs,fhc,fhfs,caddrlen,faddrlen,port;
+    long int filesz;
+    struct sockaddr_in caddress,faddress;
+    char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0};
+    port = atoi(args[1]);
+    //conexion con cliente mediante socket de comandos
+    caddress.sin_family = AF_INET;
+    caddress.sin_addr.s_addr = inet_addr(IP);
+    caddress.sin_port = htons(port);
+    caddrlen = sizeof(caddress);
+    if((fhs = socket(AF_INET,SOCK_STREAM,0)) < 0){
+        printf("** fallo en la creacion del socket **\n");
         return -2;
+    }
+    if(bind(fhs,(struct sockaddr*)&caddress,(socklen_t)caddrlen) < 0){
+        printf("** fallo el bind **\ncodigo de error %d.\n",errno);
+        return -3;
     }
     if(listen(fhs,3) < 0){
         printf("** fallo el listen **\n");
-        return -3;
-    }
-    if((fhc = accept(fhs,(struct sockaddr*)&address,(socklen_t*)&addrlen)) < 0){
-        printf("** fallo el accept **\n");
         return -4;
+    }
+    if((fhc = accept(fhs,(struct sockaddr*)&caddress,(socklen_t*)&caddrlen)) < 0){
+        printf("** fallo el accept **\n");
+        return -5;
+    }
+    strcpy(cIP,inet_ntoa(caddress.sin_addr));           //obtengo la IP del cliente
+    //conexion con cliente mediante socket de transferencias
+    faddress.sin_family = AF_INET;
+    faddress.sin_addr.s_addr = inet_addr(cIP);
+    faddress.sin_port = htons(port + 1);
+    faddrlen = sizeof(faddress);
+    if((fhfs = socket(AF_INET,SOCK_STREAM,0)) < 0){
+        printf("** fallo la creacion del socket de transferencia **\n");
+        return -6;
+    }
+    if(connect(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
+        printf("** fallo el connect de transferencia **\nerrno = %d\n",errno);
+        return -7;
     }
     //interaccion entre servidor-cliente
     sprintf(buffer,"%d %s version %s.\r\n",CONSUC,args[0],VERSION);
     if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de bienvenida
         printf("** fallo el enviado del mensaje de bienvenida **\n");
-        return -5;
+        return -8;
     }
     if(autentication(fhc) < 0){
         close(fhs);//esto se tiene que ir
-        return -6;
+        return -9;
     }
     while(1){                                           //gestion de las peticiones
         memset(buffer,0,sizeof(buffer));
         if(read(fhc,buffer,sizeof(buffer)) < 0){
             printf("** fallo la lectura del comando enviado por el cliente **\n");
-            return -7;
+            return -10;
         }
         strncpy(cmd,buffer,(size_t)4);
         switch(buff2cmd(cmd)){
@@ -72,13 +86,14 @@ int main(int argc,char *args[]){
                 sprintf(buffer,"%d Goodbye.\r\n",CONFIN);
                 if(write(fhc,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el envio de la respuesta al cliente **\n");
-                    return -8;
+                    return -11;
                 }
                 close(fhc);
                 close(fhs);
                 return 0;
             break;
             case RETR:
+                //obtengo nombre de archivo y envio tamaño
                 strcpy(nof,buffer + 5);
                 strtok(nof,"\r\n");
                 memset(buffer,0,sizeof(buffer));
@@ -86,17 +101,16 @@ int main(int argc,char *args[]){
                     sprintf(buffer,"%d %s: no such file or directory\r\n",FILENF,nof);
                     if(write(fhc,buffer,sizeof(buffer)) < 0){
                         printf("** fallo el envio de la respuesta al cliente **\n");
-                        return -9;
+                        return -12;
                     }
                 }
-                else{
-                    sprintf(buffer,"%d file %s size %ld Bytes\r\n",FILEFO,nof,filesz);
-                    if(write(fhc,buffer,sizeof(buffer)) < 0){
-                        printf("** fallo el envio de la respuesta al cliente **\n");
-                        return -10;
-                    }
-                    //PASAR AL ENVIADO DEL ARCHIVO
+                sprintf(buffer,"%d file %s size %ld Bytes\r\n",FILEFO,nof,filesz);
+                if(write(fhc,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo el envio de la respuesta al cliente **\n");
+                    return -13;
                 }
+                //particiono y envío el archivo
+
             break;
         }
     }
