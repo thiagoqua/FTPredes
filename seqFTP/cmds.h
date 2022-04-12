@@ -1,4 +1,4 @@
-//COMANDOS PARA LA INTERACCION SERVIDOR-CLIENTE
+//COMANDOS PARA LA INTERACCION SERVIDOR-CLIENTE. LOS VALORES NO TIENEN RELEVANCIA.
 #define QUIT 69
 #define USER 70
 #define PASS 71
@@ -17,10 +17,7 @@
 #define TRASUC 226              //TRANSFER SUCCESSFULL
 
 //MACROS EXTRA
-#define true 1
-#define false 0
-#define BUFFLEN 60              //longiud del buffer
-#define AUTLEN 20               //longitud de los arreglos de autenticacion
-#define NOFLEN 20               //longitud del nombre del archivo para transferir
-
-typedef short int boolean;
+#define BUFFLEN  60             //longitud del buffer de comandos
+#define FBUFFLEN 512            //longitud del buffer de transferencia de archivo
+#define AUTLEN   20             //longitud de los arreglos de autenticacion
+#define NOFLEN   20             //longitud del nombre del archivo para transferir

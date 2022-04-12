@@ -4,19 +4,23 @@
 #include<netinet/in.h>
 #include<string.h>
 #include<unistd.h>
+#include<sys/types.h>
+#include<fcntl.h>
+#include<errno.h>
 #include"cmds.h"
 
-#define DESTFILES   "cliFiles/"                 //DIRECTORIO DONDE SE VAN A ALMACENAR LOS ARCHIVOS TRANSFERIDOS
+#define DIRDESTFILES "cliFiles/"                //DIRECTORIO DONDE SE VAN A ALMACENAR LOS ARCHIVOS TRANSFERIDOS
 
 int input2cmd(char[]);                          //extrae el comando de lo ingresado por el usuario
 int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
+int receivefile(int,char[]);
 
 int main(int argc,char *args[]){
     if(argc != 3){
         printf("** cantidad de argumentos incorrecta **\n");
-        return -1;
+        return -4;
     }
-    int fhs,fhfs,fhfc,port,saddrlen,faddrlen;
+    int fhs,fhfs,fhfc,port,saddrlen,faddrlen,retcode;
     struct sockaddr_in saddress,faddress;
     char buffer[BUFFLEN] = {0},input[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0};
     //conexion con servidor mediante socket de comandos
@@ -33,15 +37,15 @@ int main(int argc,char *args[]){
         printf("** fallo la conexion **\n");
         return -3;
     }
-    if((fhfs = socket(AF_INET,SOCK_STREAM,0)) < 0){         //creo ya de ahora el socket para transferencia de archivos
-        printf("** fallo en la creacion del socket de escucha **\n");
-        return -8;
-    }
     //conexion con servidor mediante socket de transferencias
     faddress.sin_family = AF_INET;
     faddress.sin_addr.s_addr = inet_addr("127.0.0.1");
     faddress.sin_port = htons(port + 1);
     faddrlen = sizeof(faddress);
+    if((fhfs = socket(AF_INET,SOCK_STREAM,0)) < 0){         //creo el socket para transferencia de archivos
+        printf("** fallo en la creacion del socket de escucha **\n");
+        return -8;
+    }
     if(bind(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
         //cambio el puerto
         port = 0;
@@ -52,6 +56,10 @@ int main(int argc,char *args[]){
             printf("** fallo el bind post cambiado de puerto **\n");
             return -35;
         }
+        getsockname(fhfs,(struct sockaddr*)&faddress,(socklen_t*)&faddrlen);
+        #ifdef DEB
+            printf("puerto %d ocupado por lo que cambiamos de puerto.\n",atoi(args[2])+1);
+        #endif
         //aviso al servidor del cambio
         sprintf(buffer,"PORT %d\r\n",ntohs(faddress.sin_port));
         if(write(fhs,buffer,sizeof(buffer)) < 0){
@@ -67,8 +75,10 @@ int main(int argc,char *args[]){
         printf("** fallo el accept **\n");
         return -5;
     }
+    getsockname(fhfs,(struct sockaddr*)&faddress,(socklen_t*)&faddrlen);
     #ifdef DEB
-        printf("servidor con ip '%s' conectado\n",inet_ntoa(faddress.sin_addr));
+        printf("canal de transferencia creado en puerto %d.\n\n",ntohs(faddress.sin_port));
+        printf("servidor con ip '%s' conectado al canal de transferencias.\n",inet_ntoa(faddress.sin_addr));
     #endif
     //interacciones entre cliente y servidor
     memset(buffer,0,sizeof(buffer));
@@ -103,11 +113,11 @@ int main(int argc,char *args[]){
                 #ifdef DEB
                     printf("\n%s\n",buffer);      
                 #endif
-                close(fhs);
+                close(fhs); close(fhfs); close(fhfc);
                 return 0;
             break;
             case GET:
-                //mando comando RETR
+                //envio nombre de archivo y recibo tamaño
                 strcpy(nof,input + 4);
                 memset(buffer,0,sizeof(buffer));
                 sprintf(buffer,"RETR %s\r\n",nof);
@@ -122,6 +132,20 @@ int main(int argc,char *args[]){
                 }
                 #ifdef DEB
                     printf("\n%s\n",buffer);
+                #endif
+                retcode = atoi(buffer);                     //obtengo codigo de respuesta
+                if(retcode == FILENF)
+                    continue;   
+                //proceso de recepción de archivo 
+                if(receivefile(fhfc,nof) < 0)
+                    return -12;
+                memset(buffer,0,sizeof(buffer));
+                if(read(fhs,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo en la recepcion de la respuesta del servidor **\n");
+                    return -11;
+                }
+                #ifdef DEB
+                    printf("%s\n",buffer);
                 #endif
             break;
             default:
@@ -156,7 +180,7 @@ int autentication(int fhs){
         return -1;
     }
     #ifdef DEB
-        printf("\n%s\n",buffer);      //mensaje de bienvenida
+        printf("\n%s\n",buffer);      
     #endif
     printf("password: ");
     fgets(input,sizeof(input),stdin);
@@ -174,8 +198,34 @@ int autentication(int fhs){
     }
     retcode = atoi(buffer);                                 //me quedo con el codigo que devolvió el servidor
     #ifdef DEB
-        printf("\n%s\n",buffer);      //mensaje de bienvenida
+        printf("\n%s\n",buffer);
     #endif
     if(retcode == LOGUNS)
         return -1;
+return 0;}
+
+int receivefile(int fhfc,char nof[]){
+    FILE *archivito;
+    int pathlen = strlen(DIRDESTFILES) + strlen(nof);
+    char path[pathlen],buffer[FBUFFLEN] = {0};
+    sprintf(path,"%s%s",DIRDESTFILES,nof);
+    archivito = fopen(path,"wb");
+    if(archivito == NULL){
+        printf("** no se pudo abrir el archivo **\n");
+        return -1;
+    }
+    while(1){
+        fflush(archivito);
+        if(read(fhfc,buffer,sizeof(buffer)) < 0){
+            printf("** fallo la lectura del archivo en el socket de transferencia **\n");
+            return -1;
+        }
+        if(strstr(buffer,"-1") != NULL){                    //llegue al fin de archivo
+            strtok(buffer,"-1");
+            fwrite(buffer,sizeof(char),sizeof(char) * strlen(buffer),archivito);
+            break;
+        }
+        fwrite(buffer,sizeof(char),sizeof(char) * strlen(buffer),archivito);
+    }
+    fclose(archivito);
 return 0;}

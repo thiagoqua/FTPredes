@@ -10,13 +10,14 @@
 
 #define VERSION     "1.0"
 #define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS
-#define SOURCEFILES "srvFiles/"                 //DIRECTORIO DONDE ESTAN LOS ARCHIVOS PARA TRANSFERIR      
-#define IP "127.0.0.5"               
+#define DIRSRCFILES "srvFiles/"              //DIRECTORIO DONDE ESTAN LOS ARCHIVOS PARA TRANSFERIR      
+#define IP "127.0.0.5"         
 
 int buff2cmd(char[]);                           //extrae el comando del buffer leido
 int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
 int validate(char[],char[]);                    //valida que el user y la psw estén en el archivo de acceso
 long int fsize(char[]);                         //deuelve el tamaño del archivo solicitado
+int sendfile(int,char[]);                       //envia el archivo
 
 int main(int argc,char *args[]){
     if(argc != 2){
@@ -73,16 +74,17 @@ int main(int argc,char *args[]){
             faddress.sin_port = htons(port);
             faddrlen = sizeof(faddress);
         }
-        //si falla ahora es porque hay otro error y aborto
         if(connect(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
-            printf("** fallo el connect de transferencia post cambio de puerto **\nerrno = %d\n",errno);
+            //si falló ahora es porque hay otro error y aborto
+            printf("** fallo el connect de transferencia post cambio de puerto **\n");
+            printf("puerto al que intentamos conectar fue %d\n",ntohs(faddress.sin_port));
             return -35;
         }
     }
     //interaccion entre servidor-cliente
     memset(buffer,0,sizeof(buffer));
     memset(cmd,0,sizeof(cmd));
-    sprintf(buffer,"%d %s version %s.\r\n",CONSUC,args[0],VERSION);
+    sprintf(buffer,"%d %s version %s\r\n",CONSUC,args[0],VERSION);
     if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de bienvenida
         printf("** fallo el enviado del mensaje de bienvenida **\n");
         return -8;
@@ -106,8 +108,7 @@ int main(int argc,char *args[]){
                     printf("** fallo el envio de la respuesta al cliente **\n");
                     return -11;
                 }
-                close(fhc);
-                close(fhs);
+                close(fhc); close(fhs); close(fhfs);
                 return 0;
             break;
             case RETR:
@@ -128,8 +129,15 @@ int main(int argc,char *args[]){
                     printf("** fallo el envio de la respuesta al cliente **\n");
                     return -13;
                 }
-                //particiono y envío el archivo
-
+                //proceso de enviado del achivo
+                if(sendfile(fhfs,nof) < 0)
+                    return -14;
+                memset(buffer,0,sizeof(buffer));
+                sprintf(buffer,"%d Transfer complete\r\n",TRASUC);
+                if(write(fhc,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo el envio de la respuesta al cliente **\n");
+                    return -14;
+                }
             break;
         }
     }
@@ -228,10 +236,10 @@ return -1;}
 
 long int fsize(char nof[]){
     FILE *archivito;
-    int pathlen = strlen(SOURCEFILES) + strlen(nof);
+    int pathlen = strlen(DIRSRCFILES) + strlen(nof);
     char path[pathlen];
     long int sz;
-    sprintf(path,"%s%s",SOURCEFILES,nof);
+    sprintf(path,"%s%s",DIRSRCFILES,nof);
     archivito = fopen(path,"r");
     if(archivito == NULL)
         return -1;
@@ -239,3 +247,30 @@ long int fsize(char nof[]){
     sz = ftell(archivito);
     fclose(archivito);
 return sz;}
+
+int sendfile(int fhfs,char nof[]){
+    FILE *archivito;
+    int pathlen = strlen(DIRSRCFILES) + strlen(nof);
+    char path[pathlen],buffer[FBUFFLEN] = {0};
+    sprintf(path,"%s%s",DIRSRCFILES,nof);
+    archivito = fopen(path,"rb");
+    if(archivito == NULL){
+        printf("** no se pudo abrir el archivo **\n");
+        return -1;
+    }
+    while(!feof(archivito)){
+        fflush(archivito);
+        fread(buffer,sizeof(char),(size_t)FBUFFLEN,archivito);
+        if(write(fhfs,buffer,sizeof(char) * strlen(buffer)) < 0){
+            printf("** fallo el enviado del archivo al cliente **\n");
+            fclose(archivito);
+            return -1;
+        }
+    }
+    if(write(fhfs,"-1",sizeof("-1")) < 0){                  //indico el fin de archivo
+        printf("** fallo el enviado del EOF al cliente **\n");
+        fclose(archivito);
+        return -1;
+    }
+    fclose(archivito);
+return 0;}
