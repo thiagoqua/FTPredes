@@ -20,8 +20,8 @@ int main(int argc,char *args[]){
         printf("** cantidad de argumentos incorrecta **\n");
         return -4;
     }
-    int fhs,fhfs,fhfc,port,saddrlen,faddrlen,retcode;
-    struct sockaddr_in saddress,faddress;
+    int fhs,fhfs,fhfc,port,saddrlen,retcode;
+    struct sockaddr_in saddress;
     char buffer[BUFFLEN] = {0},input[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0};
     //conexion con servidor mediante socket de comandos
     port = atoi(args[2]);
@@ -38,30 +38,30 @@ int main(int argc,char *args[]){
         return -3;
     }
     //conexion con servidor mediante socket de transferencias
-    faddress.sin_family = AF_INET;
-    faddress.sin_addr.s_addr = inet_addr("127.0.0.1");
-    faddress.sin_port = htons(port + 1);
-    faddrlen = sizeof(faddress);
+    saddress.sin_family = AF_INET;
+    saddress.sin_addr.s_addr = inet_addr("127.0.0.1");
+    saddress.sin_port = htons(port + 1);
+    saddrlen = sizeof(saddress);
     if((fhfs = socket(AF_INET,SOCK_STREAM,0)) < 0){         //creo el socket para transferencia de archivos
         printf("** fallo en la creacion del socket de escucha **\n");
         return -8;
     }
-    if(bind(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
+    if(bind(fhfs,(struct sockaddr*)&saddress,(socklen_t)saddrlen) < 0){
         //cambio el puerto
         port = 0;
-        faddress.sin_port = htons(port);
-        faddrlen = sizeof(faddress);
-        if(bind(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
+        saddress.sin_port = htons(port);
+        saddrlen = sizeof(saddress);
+        if(bind(fhfs,(struct sockaddr*)&saddress,(socklen_t)saddrlen) < 0){
             //si falló ahora es porque hay otro error y aborto
             printf("** fallo el bind post cambiado de puerto **\n");
             return -35;
         }
-        getsockname(fhfs,(struct sockaddr*)&faddress,(socklen_t*)&faddrlen);
+        getsockname(fhfs,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
         #ifdef DEB
             printf("puerto %d ocupado por lo que cambiamos de puerto.\n",atoi(args[2])+1);
         #endif
         //aviso al servidor del cambio
-        sprintf(buffer,"PORT %d\r\n",ntohs(faddress.sin_port));
+        sprintf(buffer,"PORT %d\r\n",ntohs(saddress.sin_port));
         if(write(fhs,buffer,sizeof(buffer)) < 0){
             printf("** fallo el enviado del comando **\n");
             return -36;
@@ -71,14 +71,14 @@ int main(int argc,char *args[]){
         printf("** fallo el listen **\n");
         return -4;
     }
-    if((fhfc = accept(fhfs,(struct sockaddr*)&faddress,((socklen_t*)&faddrlen))) < 0){
+    if((fhfc = accept(fhfs,(struct sockaddr*)&saddress,((socklen_t*)&saddrlen))) < 0){
         printf("** fallo el accept **\n");
         return -5;
     }
-    getsockname(fhfs,(struct sockaddr*)&faddress,(socklen_t*)&faddrlen);
+    getsockname(fhfs,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
     #ifdef DEB
-        printf("canal de transferencia creado en puerto %d.\n\n",ntohs(faddress.sin_port));
-        printf("servidor con ip '%s' conectado al canal de transferencias.\n",inet_ntoa(faddress.sin_addr));
+        printf("canal de transferencia creado en puerto %d.\n\n",ntohs(saddress.sin_port));
+        printf("servidor con ip '%s' conectado al canal de transferencias.\n",inet_ntoa(saddress.sin_addr));
     #endif
     //interacciones entre cliente y servidor
     memset(buffer,0,sizeof(buffer));

@@ -24,9 +24,9 @@ int main(int argc,char *args[]){
         printf("** cantidad de argumentos incorrecta **\n");
         return -1;
     }
-    int fhs,fhc,fhfs,caddrlen,faddrlen,port;
+    int fhs,fhc,fhfs,caddrlen,port;
     long int filesz;
-    struct sockaddr_in caddress,faddress;
+    struct sockaddr_in caddress;
     char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},aux[10] = {0};
     port = atoi(args[1]);
     //conexion con cliente mediante socket de comandos
@@ -52,15 +52,15 @@ int main(int argc,char *args[]){
     }
     strcpy(cIP,inet_ntoa(caddress.sin_addr));           //obtengo la IP del cliente
     //conexion con cliente mediante socket de transferencias
-    faddress.sin_family = AF_INET;
-    faddress.sin_addr.s_addr = inet_addr(cIP);
-    faddress.sin_port = htons(port + 1);
-    faddrlen = sizeof(faddress);
+    caddress.sin_family = AF_INET;
+    caddress.sin_addr.s_addr = inet_addr(cIP);
+    caddress.sin_port = htons(port + 1);
+    caddrlen = sizeof(caddress);
     if((fhfs = socket(AF_INET,SOCK_STREAM,0)) < 0){
         printf("** fallo la creacion del socket de transferencia **\n");
         return -6;
     }
-    if(connect(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
+    if(connect(fhfs,(struct sockaddr*)&caddress,(socklen_t)caddrlen) < 0){
         //checkeo si el cliente me mando un cambio de puerto
         if(read(fhc,buffer,sizeof(buffer)) < 0){
             printf("** fallo la lectura del comando enviado por el cliente **\n");
@@ -71,13 +71,13 @@ int main(int argc,char *args[]){
             strcpy(aux,buffer + 5);
             strtok(aux,"\r\n");
             port = atoi(aux);
-            faddress.sin_port = htons(port);
-            faddrlen = sizeof(faddress);
+            caddress.sin_port = htons(port);
+            caddrlen = sizeof(caddress);
         }
-        if(connect(fhfs,(struct sockaddr*)&faddress,(socklen_t)faddrlen) < 0){
+        if(connect(fhfs,(struct sockaddr*)&caddress,(socklen_t)caddrlen) < 0){
             //si falló ahora es porque hay otro error y aborto
             printf("** fallo el connect de transferencia post cambio de puerto **\n");
-            printf("puerto al que intentamos conectar fue %d\n",ntohs(faddress.sin_port));
+            printf("puerto al que intentamos conectar fue %d\n",ntohs(caddress.sin_port));
             return -35;
         }
     }
