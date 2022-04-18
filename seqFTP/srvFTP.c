@@ -13,7 +13,7 @@
 #define DIRSRCFILES "srvFiles/"                 //DIRECTORIO DONDE ESTAN LOS ARCHIVOS PARA TRANSFERIR      
 #define IP "127.0.0.5"                          //IP PARA EL CANAL DE COMANDOS
 
-int buff2cmd(char[]);                           //extrae el comando del buffer leido
+int buff2cmd(char[]);                           //extrae el comando del buffer escrito
 int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
 int validate(char[],char[]);                    //valida que el user y la psw estén en el archivo de acceso
 int newtransfersock(int,char[]);                //crea socket de transferencia y devuelve el fhfc ya conectado al cliente
@@ -49,16 +49,16 @@ int main(int argc,char *args[]){
             return -3;
         } else {
             printf("** fallo el bind **\n");
-            return -3;
+            return -4;
         }
     }
     if(listen(fhs,3) < 0){
         printf("** fallo el listen **\n");
-        return -4;
+        return -5;
     }
     if((fhc = accept(fhs,(struct sockaddr*)&caddress,(socklen_t*)&caddrlen)) < 0){
         printf("** fallo el accept **\n");
-        return -5;
+        return -6;
     }
     //interaccion entre servidor-cliente
     memset(buffer,0,sizeof(buffer));
@@ -66,17 +66,17 @@ int main(int argc,char *args[]){
     sprintf(buffer,"%d %s version %s\r\n",CONSUC,args[0],VERSION);
     if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de bienvenida
         printf("** fallo el enviado del mensaje de bienvenida **\n");
-        return -8;
+        return -7;
     }
     if(autentication(fhc) < 0){
         close(fhs);//esto se tiene que ir
-        return -9;
+        return -8;
     }
     while(true){                                        //gestion de las peticiones
         memset(buffer,0,sizeof(buffer));
         if(read(fhc,buffer,sizeof(buffer)) < 0){
             printf("** fallo la lectura del comando enviado por el cliente **\n");
-            return -10;
+            return -9;
         }
         strncpy(cmd,buffer,(size_t)4);
         switch(buff2cmd(cmd)){
@@ -85,7 +85,7 @@ int main(int argc,char *args[]){
                 sprintf(buffer,"%d Goodbye.\r\n",CONFIN);
                 if(write(fhc,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el envio de la respuesta al cliente **\n");
-                    return -11;
+                    return -10;
                 }
                 close(fhc); close(fhs); close(fhfs);
                 return 0;
@@ -96,10 +96,12 @@ int main(int argc,char *args[]){
                     printf("recibido comando PORT con lo siguiente '%s'\n",buffer);
                 #endif
                 aux = toip(buffer+5);               //obtengo la ip
-                strcpy(cIP,aux);
                 tport = toport(buffer+5);           //obtengo el puerto
-                // if((fhfs = newtransfersock(tport,cIP)) < 0)
-                //     return -12;
+                if(aux == NULL || tport < 0){
+                    printf("** fallo la extraccion de la ip o del puerto del comando PORT **\n");
+                    return -11;
+                }
+                strcpy(cIP,aux);
                 free(aux);
                 ihaveport = true;
             break;
@@ -123,26 +125,26 @@ int main(int argc,char *args[]){
                 }
                 getsockname(fhfs,(struct sockaddr*)&caddress,(socklen_t*)&caddrlen);
                 strcpy(cIP,inet_ntoa(caddress.sin_addr));           //obtengo la IP del cliente
-                sleep(5);                                           //espero para sincronizar
+                sleep(1);                                           //espero para sincronizar
                 if(ihaveport == false){                             //si no recibí antes el comando PORT
                     tport += 1;                                     //tport = port + 1, me conecto al puerto siguiente
                     if((fhfs = newtransfersock(tport,cIP)) < 0)
-                        return -12;
+                        return -14;
                 }
                 else{                                               //si recibi antes el comando PORT
                     //tport ya va a estar seteado por el comando PORT
                     if((fhfs = newtransfersock(tport,cIP)) < 0)
-                        return -13;
+                        return -15;
                     ihaveport = false;
                 }
                 //proceso de enviado del achivo
                 if(sendfile(fhfs,nof) < 0)
-                    return -14;
+                    return -16;
                 memset(buffer,0,sizeof(buffer));
                 sprintf(buffer,"%d Transfer complete\r\n",TRASUC);
                 if(write(fhc,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el envio de la respuesta al cliente **\n");
-                    return -14;
+                    return -17;
                 }
                 close(fhfs);
                 tport = port;
@@ -218,30 +220,29 @@ int autentication(int fhc){
 return 0;}
 
 int validate(char user[],char pass[]){
-//     FILE *archivito = fopen(NOFACCESS,"r");
-//     char read[AUTLEN + 1] = {0},aux[AUTLEN] = {0};
-//     if(archivito == NULL){
-//         printf("** error al abrir el archivo **\n");
-//         return -1;
-//     }
-//     //realizo el proceso de busqueda
-//     while(fscanf(archivito,"%[^:]",read) != EOF){
-//         if(strcmp(read,user) == 0){
-//             memset(read,0,sizeof(read));
-//             fscanf(archivito,"%s",read);
-//             strcpy(aux,read + 1);                           //porque read[1] == ":"
-//             if(strcmp(aux,pass) == 0)
-//                 return 0;
-//             else
-//                 return -1;
-//         }
-//         fscanf(archivito,"%s",read);                        //avanzo al puntero hacia el fin de línea
-//         fseek(archivito,1,SEEK_CUR);                        //avanzo al puntero una posición para que se posicione en la línea siguiente
-//         memset(read,0,sizeof(read));
-//     }
-//     fclose(archivito);
-// return -1;}
-return 0;}
+    FILE *archivito = fopen(NOFACCESS,"r");
+    char read[AUTLEN + 1] = {0},aux[AUTLEN] = {0};
+    if(archivito == NULL){
+        printf("** error al abrir el archivo **\n");
+        return -1;
+    }
+    //realizo el proceso de busqueda
+    while(fscanf(archivito,"%[^:]",read) != EOF){
+        if(strcmp(read,user) == 0){
+            memset(read,0,sizeof(read));
+            fscanf(archivito,"%s",read);
+            strcpy(aux,read + 1);                           //porque read[1] == ":"
+            if(strcmp(aux,pass) == 0)
+                return 0;
+            else
+                return -1;
+        }
+        fscanf(archivito,"%s",read);                        //avanzo al puntero hacia el fin de línea
+        fseek(archivito,1,SEEK_CUR);                        //avanzo al puntero una posición para que se posicione en la línea siguiente
+        memset(read,0,sizeof(read));
+    }
+    fclose(archivito);
+return -1;}
 
 int newtransfersock(int port,char ip[]){
     int fhfs,caddrlen;
@@ -289,8 +290,8 @@ int sendfile(int fhfs,char nof[]){
     }
     while(!feof(archivito)){
         fflush(archivito);
+        fsync(fhfs);
         fread(buffer,sizeof(char),(size_t)FBUFFLEN,archivito);
-        printf("leimos %d\n",pathlen);
         if(write(fhfs,buffer,sizeof(char) * strlen(buffer)) < 0){
             printf("** fallo el enviado del archivo al cliente **\n");
             fclose(archivito);
@@ -346,6 +347,8 @@ int toport(char buffer[]){
         if(buffer[index] == ' ')
             ++manyspaces;
         ++index;
+        if(index > BUFFLEN)
+            return -1;
     }
     port = (a * 256) + b;
 return port;}

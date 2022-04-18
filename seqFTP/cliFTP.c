@@ -45,13 +45,13 @@ int main(int argc,char *args[]){
     memset(buffer,0,sizeof(buffer));
     if(read(fhs,buffer,sizeof(buffer)) < 0){
         printf("** fallo la recepcion del mensaje **\n");
-        return -6;
+        return -4;
     }
     #ifdef DEB
         printf("\n%s\n",buffer);        //mensaje de bienvenida
     #endif
     if(autentication(fhs) < 0)
-        return -7;
+        return -5;
     while(true){                        //se generan y gestionan las peticiones al servidor
         memset(buffer,0,sizeof(buffer));
         memset(input,0,sizeof(input));
@@ -64,17 +64,17 @@ int main(int argc,char *args[]){
                 strcpy(buffer,"QUIT\r\n");
                 if(write(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el enviado del comando **\n");
-                    return -8;
+                    return -6;
                 }
                 memset(buffer,0,sizeof(buffer));
                 if(read(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo en la recepcion de la respuesta del servidor **\n");
-                    return -9;
+                    return -7;
                 }
                 #ifdef DEB
                     printf("\n%s\n",buffer);      
                 #endif
-                close(fhs); close(fhfs); close(fhfc);
+                close(fhs);
                 return 0;
             break;
             case GET:
@@ -82,7 +82,7 @@ int main(int argc,char *args[]){
                 tport = port;
                 if((fhfs = newtransfersock(&tport,fhs)) < 0){
                     printf("** no se pudo crear el canal de transferencias **\n");
-                    return -10;
+                    return -8;
                 }
                 saddress.sin_family = AF_INET;
                 saddress.sin_addr.s_addr = inet_addr(IP);
@@ -94,12 +94,12 @@ int main(int argc,char *args[]){
                 sprintf(buffer,"RETR %s\r\n",nof);
                 if(write(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el enviado del comando **\n");
-                    return -10;
+                    return -9;
                 }
                 memset(buffer,0,sizeof(buffer));
                 if(read(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo en la recepcion de la respuesta del servidor **\n");
-                    return -11;
+                    return -10;
                 }
                 #ifdef DEB
                     getsockname(fhfc,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
@@ -114,26 +114,24 @@ int main(int argc,char *args[]){
                 }
                 else if(retcode == FILEFO){
                     //acepto al servidor en el socket de transferencias
-                    printf("escuchando en ip %s y puerto %d\n",inet_ntoa(saddress.sin_addr),ntohs(saddress.sin_port));
                     if(listen(fhfs,3) < 0){
                         printf("** fallo el listen **\n");
-                        return -4;
+                        return -11;
                     }
                     if((fhfc = accept(fhfs,(struct sockaddr*)&saddress,((socklen_t*)&saddrlen))) < 0){
                         printf("** fallo el accept **\n");
-                        return -5;
+                        return -12;
                     }
                     #ifdef DEB
-                        printf("\ncanal de transferencia creado en puerto %d.\n\n",ntohs(saddress.sin_port));
-                        printf("servidor con ip '%s' conectado al canal de transferencias.\n",inet_ntoa(saddress.sin_addr));
+                        printf("servidor con ip '%s' conectado al canal de transferencias.\n\n",inet_ntoa(saddress.sin_addr));
                     #endif
                     //recibo el archivo 
                     if(receivefile(fhfc,nof) < 0)
-                        return -12;
+                        return -13;
                     memset(buffer,0,sizeof(buffer));
                     if(read(fhs,buffer,sizeof(buffer)) < 0){
                         printf("** fallo en la recepcion de la respuesta del servidor **\n");
-                        return -11;
+                        return -14;
                     }
                     #ifdef DEB
                         printf("%s\n",buffer);
@@ -141,10 +139,10 @@ int main(int argc,char *args[]){
                 }
                 else{
                     printf("** codigo de retorno del servidor inválido **\n");
-                    close(fhfc);
-                    return -12;
+                    close(fhfs); close(fhfc);
+                    return -15;
                 }
-                close(fhfc);
+                close(fhfs); close(fhfc);
             break;
             default:
                 printf("\n* operación incorrecta. reingrese *\n\n");
@@ -206,7 +204,7 @@ int newtransfersock(int *port,int fhs){
     int fhfs,saddrlen,newport,*forport;
     char buffer[BUFFLEN] = {0},*spacedip;
     struct sockaddr_in saddress;
-    newport = *port + 1;                                    //para el canal de transferencias
+    newport = *port + 1;
     saddress.sin_family = AF_INET;
     saddress.sin_addr.s_addr = inet_addr(IP);
     saddress.sin_port = htons(newport);
@@ -234,15 +232,18 @@ int newtransfersock(int *port,int fhs){
         #endif
         spacedip = spacing(inet_ntoa(saddress.sin_addr));
         forport = calculito(newport);
+        if(spacedip == NULL || forport == NULL){
+            printf("** fallo el formateo de la ip o del puerto para el comando PORT **\n");
+            return -1;
+        }
         sprintf(buffer,"PORT %s %d %d\r\n",spacedip,*(forport),*(forport+1));
-        // = PORT 127 0 0 5 42 253
         if(write(fhs,buffer,sizeof(buffer)) < 0){
             printf("** fallo el enviado del comando **\n");
             return -1;
         }
         free(spacedip); free(forport);
     }
-    *port = newport;
+    *port = newport;                    //guardo el puerto al que me conecté satisfactoriamente
 return fhfs;}
 
 int receivefile(int fhfc,char nof[]){
@@ -257,6 +258,7 @@ int receivefile(int fhfc,char nof[]){
     }
     while(true){
         fflush(archivito);
+        fsync(fhfc);
         if(read(fhfc,buffer,sizeof(buffer)) < 0){
             printf("** fallo la lectura del archivo en el socket de transferencia **\n");
             return -1;
