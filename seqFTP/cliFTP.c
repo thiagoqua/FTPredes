@@ -9,18 +9,22 @@
 #include<errno.h>
 #include"cmds.h"
 
-#define DIRDESTFILES "cliFiles/"                //DIRECTORIO DONDE SE VAN A ALMACENAR LOS ARCHIVOS TRANSFERIDOS
+#define DIRDESTFILES "cliFiles/"            //DIRECTORIO DONDE SE VAN A ALMACENAR LOS ARCHIVOS TRANSFERIDOS
+#define IP "127.0.0.1"                      //IP PARA EL CANAL DE TRANSFERENCIAS
 
-int input2cmd(char[]);                          //extrae el comando de lo ingresado por el usuario
-int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
+int input2cmd(char[]);                      //extrae el comando de lo ingresado por el usuario
+int autentication(int);                     //realiza toda la autenticación completa del usuario que quiere acceder
+int newtransfersock(int*,int);              //crea socket de transferencia pero no devuelve al fhfs conectado con el servidor
 int receivefile(int,char[]);
+char* spacing(char[]);                      //devuelve la ip que se le pasa sin los puntos. para comando PORT
+int* calculito(int);                        //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
 
 int main(int argc,char *args[]){
     if(argc != 3){
         printf("** cantidad de argumentos incorrecta **\n");
-        return -4;
+        return -1;
     }
-    int fhs,fhfs,fhfc,port,saddrlen,retcode;
+    int fhs,fhfs,fhfc,port,tport,saddrlen,retcode;
     struct sockaddr_in saddress;
     char buffer[BUFFLEN] = {0},input[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0};
     //conexion con servidor mediante socket de comandos
@@ -30,56 +34,13 @@ int main(int argc,char *args[]){
     saddress.sin_port = htons(port);
     saddrlen = sizeof(saddress);
     if((fhs = socket(AF_INET,SOCK_STREAM,0)) < 0){
-        printf("** fallo en la creacion del socket **\n");
+        printf("** fallo en la creacion del socket de comandos **\n");
         return -2;
     }
     if(connect(fhs,(struct sockaddr*)&saddress,(socklen_t)saddrlen) < 0){
-        printf("** fallo la conexion **\n");
+        printf("** fallo la conexion del socket de comandos **\n");
         return -3;
     }
-    //conexion con servidor mediante socket de transferencias
-    saddress.sin_family = AF_INET;
-    saddress.sin_addr.s_addr = inet_addr("127.0.0.1");
-    saddress.sin_port = htons(port + 1);
-    saddrlen = sizeof(saddress);
-    if((fhfs = socket(AF_INET,SOCK_STREAM,0)) < 0){         //creo el socket para transferencia de archivos
-        printf("** fallo en la creacion del socket de escucha **\n");
-        return -8;
-    }
-    if(bind(fhfs,(struct sockaddr*)&saddress,(socklen_t)saddrlen) < 0){
-        //cambio el puerto
-        port = 0;
-        saddress.sin_port = htons(port);
-        saddrlen = sizeof(saddress);
-        if(bind(fhfs,(struct sockaddr*)&saddress,(socklen_t)saddrlen) < 0){
-            //si falló ahora es porque hay otro error y aborto
-            printf("** fallo el bind post cambiado de puerto **\n");
-            return -35;
-        }
-        getsockname(fhfs,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
-        #ifdef DEB
-            printf("puerto %d ocupado por lo que cambiamos de puerto.\n",atoi(args[2])+1);
-        #endif
-        //aviso al servidor del cambio
-        sprintf(buffer,"PORT %d\r\n",ntohs(saddress.sin_port));
-        if(write(fhs,buffer,sizeof(buffer)) < 0){
-            printf("** fallo el enviado del comando **\n");
-            return -36;
-        }
-    }
-    if(listen(fhfs,3) < 0){
-        printf("** fallo el listen **\n");
-        return -4;
-    }
-    if((fhfc = accept(fhfs,(struct sockaddr*)&saddress,((socklen_t*)&saddrlen))) < 0){
-        printf("** fallo el accept **\n");
-        return -5;
-    }
-    getsockname(fhfs,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
-    #ifdef DEB
-        printf("canal de transferencia creado en puerto %d.\n\n",ntohs(saddress.sin_port));
-        printf("servidor con ip '%s' conectado al canal de transferencias.\n",inet_ntoa(saddress.sin_addr));
-    #endif
     //interacciones entre cliente y servidor
     memset(buffer,0,sizeof(buffer));
     if(read(fhs,buffer,sizeof(buffer)) < 0){
@@ -87,11 +48,11 @@ int main(int argc,char *args[]){
         return -6;
     }
     #ifdef DEB
-        printf("\n%s\n",buffer);      //mensaje de bienvenida
+        printf("\n%s\n",buffer);        //mensaje de bienvenida
     #endif
     if(autentication(fhs) < 0)
         return -7;
-    while(1){                   //se generan y gestionan las peticiones al servidor
+    while(true){                        //se generan y gestionan las peticiones al servidor
         memset(buffer,0,sizeof(buffer));
         memset(input,0,sizeof(input));
         printf("operación: ");
@@ -117,7 +78,17 @@ int main(int argc,char *args[]){
                 return 0;
             break;
             case GET:
-                //envio nombre de archivo y recibo tamaño
+                //creo socket de transferencias
+                tport = port;
+                if((fhfs = newtransfersock(&tport,fhs)) < 0){
+                    printf("** no se pudo crear el canal de transferencias **\n");
+                    return -10;
+                }
+                saddress.sin_family = AF_INET;
+                saddress.sin_addr.s_addr = inet_addr(IP);
+                saddress.sin_port = htons(tport);
+                saddrlen = sizeof(saddress);
+                //envio RETR, nombre de archivo y recibo tamaño
                 strcpy(nof,input + 4);
                 memset(buffer,0,sizeof(buffer));
                 sprintf(buffer,"RETR %s\r\n",nof);
@@ -131,22 +102,49 @@ int main(int argc,char *args[]){
                     return -11;
                 }
                 #ifdef DEB
+                    getsockname(fhfc,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
                     printf("\n%s\n",buffer);
                 #endif
-                retcode = atoi(buffer);                     //obtengo codigo de respuesta
-                if(retcode == FILENF)
-                    continue;   
-                //proceso de recepción de archivo 
-                if(receivefile(fhfc,nof) < 0)
-                    return -12;
-                memset(buffer,0,sizeof(buffer));
-                if(read(fhs,buffer,sizeof(buffer)) < 0){
-                    printf("** fallo en la recepcion de la respuesta del servidor **\n");
-                    return -11;
+                //obtengo código de respuesta del archivo solicitado
+                retcode = atoi(buffer);
+                if(retcode == FILENF){
+                    printf("* archivo no encontrado *\n\n");
+                    close(fhfc);
+                    continue;
                 }
-                #ifdef DEB
-                    printf("%s\n",buffer);
-                #endif
+                else if(retcode == FILEFO){
+                    //acepto al servidor en el socket de transferencias
+                    printf("escuchando en ip %s y puerto %d\n",inet_ntoa(saddress.sin_addr),ntohs(saddress.sin_port));
+                    if(listen(fhfs,3) < 0){
+                        printf("** fallo el listen **\n");
+                        return -4;
+                    }
+                    if((fhfc = accept(fhfs,(struct sockaddr*)&saddress,((socklen_t*)&saddrlen))) < 0){
+                        printf("** fallo el accept **\n");
+                        return -5;
+                    }
+                    #ifdef DEB
+                        printf("\ncanal de transferencia creado en puerto %d.\n\n",ntohs(saddress.sin_port));
+                        printf("servidor con ip '%s' conectado al canal de transferencias.\n",inet_ntoa(saddress.sin_addr));
+                    #endif
+                    //recibo el archivo 
+                    if(receivefile(fhfc,nof) < 0)
+                        return -12;
+                    memset(buffer,0,sizeof(buffer));
+                    if(read(fhs,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo en la recepcion de la respuesta del servidor **\n");
+                        return -11;
+                    }
+                    #ifdef DEB
+                        printf("%s\n",buffer);
+                    #endif
+                }
+                else{
+                    printf("** codigo de retorno del servidor inválido **\n");
+                    close(fhfc);
+                    return -12;
+                }
+                close(fhfc);
             break;
             default:
                 printf("\n* operación incorrecta. reingrese *\n\n");
@@ -204,9 +202,52 @@ int autentication(int fhs){
         return -1;
 return 0;}
 
+int newtransfersock(int *port,int fhs){
+    int fhfs,saddrlen,newport,*forport;
+    char buffer[BUFFLEN] = {0},*spacedip;
+    struct sockaddr_in saddress;
+    newport = *port + 1;                                    //para el canal de transferencias
+    saddress.sin_family = AF_INET;
+    saddress.sin_addr.s_addr = inet_addr(IP);
+    saddress.sin_port = htons(newport);
+    saddrlen = sizeof(saddress);
+    if((fhfs = socket(AF_INET,SOCK_STREAM,0)) < 0){         //creo el socket para transferencia de archivos
+        printf("** fallo en la creacion del socket de escucha **\n");
+        return -1;
+    }
+    if(bind(fhfs,(struct sockaddr*)&saddress,(socklen_t)saddrlen) < 0){
+        //cambio el puerto
+        newport = 0;
+        saddress.sin_port = htons(newport);
+        saddrlen = sizeof(saddress);
+        if(bind(fhfs,(struct sockaddr*)&saddress,(socklen_t)saddrlen) < 0){
+            //si falló ahora es porque hay otro error y aborto
+            printf("** fallo el bind post cambiado de puerto **\n");
+            return -1;
+        }
+        //aviso al servidor del cambio
+        getsockname(fhfs,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
+        newport = ntohs(saddress.sin_port);
+        #ifdef DEB
+            printf("\npuerto %d ocupado por lo que cambiamos de puerto.\n",*port + 1);
+            printf("nuevo puerto para la conexión es %d.\n",newport);
+        #endif
+        spacedip = spacing(inet_ntoa(saddress.sin_addr));
+        forport = calculito(newport);
+        sprintf(buffer,"PORT %s %d %d\r\n",spacedip,*(forport),*(forport+1));
+        // = PORT 127 0 0 5 42 253
+        if(write(fhs,buffer,sizeof(buffer)) < 0){
+            printf("** fallo el enviado del comando **\n");
+            return -1;
+        }
+        free(spacedip); free(forport);
+    }
+    *port = newport;
+return fhfs;}
+
 int receivefile(int fhfc,char nof[]){
     FILE *archivito;
-    int pathlen = strlen(DIRDESTFILES) + strlen(nof);
+    int pathlen = sizeof(DIRDESTFILES) + strlen(nof);
     char path[pathlen],buffer[FBUFFLEN] = {0};
     sprintf(path,"%s%s",DIRDESTFILES,nof);
     archivito = fopen(path,"wb");
@@ -214,18 +255,44 @@ int receivefile(int fhfc,char nof[]){
         printf("** no se pudo abrir el archivo **\n");
         return -1;
     }
-    while(1){
+    while(true){
         fflush(archivito);
         if(read(fhfc,buffer,sizeof(buffer)) < 0){
             printf("** fallo la lectura del archivo en el socket de transferencia **\n");
             return -1;
         }
-        if(strstr(buffer,"-1") != NULL){                    //llegue al fin de archivo
-            strtok(buffer,"-1");
+        if(strstr(buffer,"-EOF-") != NULL){                    //llegue al fin de archivo
+            strtok(buffer,"-EOF-");
             fwrite(buffer,sizeof(char),sizeof(char) * strlen(buffer),archivito);
             break;
         }
         fwrite(buffer,sizeof(char),sizeof(char) * strlen(buffer),archivito);
+        memset(buffer,0,sizeof(buffer));
     }
     fclose(archivito);
 return 0;}
+
+char* spacing(char ip[]){
+    char *ret = (char*)malloc(INET_ADDRSTRLEN * sizeof(char));
+    if(ret == NULL){
+        printf("** fallo la asignacion de dinamic memory para el string **\n");
+        return NULL;
+    }
+    for(int i = 0;ip[i] != '\0';++i){
+        if(ip[i] != '.')
+            *(ret + i) = ip[i];
+        else
+            *(ret + i) = ' ';
+    }
+    *(ret + (INET_ADDRSTRLEN - 1)) = '\0';
+return ret;}
+
+int* calculito(int port){
+    int *ret = (int*)malloc(2 * sizeof(int));
+    if(ret == NULL){
+        printf("** fallo la asignacion de dinamic memory para los numeros**\n");
+        return NULL;
+    }
+    *ret = port / 256;
+    *(ret + 1) = port % 256;
+return ret;}

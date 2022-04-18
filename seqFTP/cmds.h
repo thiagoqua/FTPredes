@@ -17,7 +17,11 @@
 #define TRASUC 226              //TRANSFER SUCCESSFULL
 
 //MACROS EXTRA
+#define true 1
+#define false 0
 #define BUFFLEN  60             //longitud del buffer de comandos
 #define FBUFFLEN 512            //longitud del buffer de transferencia de archivo
 #define AUTLEN   20             //longitud de los arreglos de autenticacion
 #define NOFLEN   20             //longitud del nombre del archivo para transferir
+
+typedef short int bool;
