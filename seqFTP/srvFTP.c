@@ -33,7 +33,6 @@ int main(int argc,char *args[]){
     char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},*aux;
     bool ihaveport = false;             //si recibo o no el comando PORT
     port = atoi(args[1]);
-    tport = port;
     //conexion con cliente mediante socket de comandos
     caddress.sin_family = AF_INET;
     caddress.sin_addr.s_addr = inet_addr(IP);
@@ -60,6 +59,8 @@ int main(int argc,char *args[]){
         printf("** fallo el accept **\n");
         return -6;
     }
+    port = ntohs(caddress.sin_port);
+    tport = port;
     //interaccion entre servidor-cliente
     memset(buffer,0,sizeof(buffer));
     memset(cmd,0,sizeof(cmd));
@@ -93,7 +94,7 @@ int main(int argc,char *args[]){
             case PORT:
                 strtok(buffer,"\r\n");
                 #ifdef DEB
-                    printf("recibido comando PORT con lo siguiente '%s'\n",buffer);
+                    printf("\nrecibido comando PORT con lo siguiente '%s'\n",buffer);
                 #endif
                 aux = toip(buffer+5);               //obtengo la ip
                 tport = toport(buffer+5);           //obtengo el puerto
@@ -280,7 +281,7 @@ return sz;}
 
 int sendfile(int fhfs,char nof[]){
     FILE *archivito;
-    int pathlen = sizeof(DIRSRCFILES) + strlen(nof);
+    int pathlen = sizeof(DIRSRCFILES) + strlen(nof),lei,escribo;
     char path[pathlen],buffer[FBUFFLEN] = {0};
     sprintf(path,"%s%s",DIRSRCFILES,nof);
     archivito = fopen(path,"rb");
@@ -291,13 +292,14 @@ int sendfile(int fhfs,char nof[]){
     while(!feof(archivito)){
         fflush(archivito);
         fsync(fhfs);
-        fread(buffer,sizeof(char),(size_t)FBUFFLEN,archivito);
-        if(write(fhfs,buffer,sizeof(char) * strlen(buffer)) < 0){
+        lei = fread(buffer,sizeof(char),(size_t)FBUFFLEN,archivito);
+        if((escribo = write(fhfs,buffer,sizeof(char) * strlen(buffer))) < 0){
             printf("** fallo el enviado del archivo al cliente **\n");
             fclose(archivito);
             return -1;
         }
         memset(buffer,0,sizeof(buffer));
+        //printf("del archivo lei %d y en el socket escribí %d\n",lei,escribo);
     }
     if(write(fhfs,"-EOF-",sizeof("-EOF-")) < 0){                  //indico el fin de archivo
         printf("** fallo el enviado del EOF al cliente **\n");

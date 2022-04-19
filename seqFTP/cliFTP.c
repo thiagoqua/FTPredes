@@ -41,6 +41,8 @@ int main(int argc,char *args[]){
         printf("** fallo la conexion del socket de comandos **\n");
         return -3;
     }
+    getsockname(fhs,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
+    port = ntohs(saddress.sin_port);
     //interacciones entre cliente y servidor
     memset(buffer,0,sizeof(buffer));
     if(read(fhs,buffer,sizeof(buffer)) < 0){
@@ -102,7 +104,7 @@ int main(int argc,char *args[]){
                     return -10;
                 }
                 #ifdef DEB
-                    getsockname(fhfc,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
+                    //getsockname(fhfc,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
                     printf("\n%s\n",buffer);
                 #endif
                 //obtengo código de respuesta del archivo solicitado
