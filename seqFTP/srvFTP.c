@@ -31,7 +31,7 @@ int main(int argc,char *args[]){
     long int filesz;
     struct sockaddr_in caddress;
     char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},*aux;
-    bool ihaveport = false;             //si recibo o no el comando PORT
+    bool ihadport = false;              //si recibo o no el comando PORT
     port = atoi(args[1]);
     //conexion con cliente mediante socket de comandos
     caddress.sin_family = AF_INET;
@@ -104,7 +104,13 @@ int main(int argc,char *args[]){
                 }
                 strcpy(cIP,aux);
                 free(aux);
-                ihaveport = true;
+                ihadport = true;
+                memset(buffer,0,sizeof(buffer));
+                sprintf(buffer,"%d PORT command successful\r\n",PRTSUC);
+                if(write(fhc,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo el envio de la respuesta al cliente **\n");
+                    return -10;
+                }
             break;
             case RETR:
                 //obtengo nombre de archivo y envio tamaño
@@ -127,7 +133,7 @@ int main(int argc,char *args[]){
                 getsockname(fhfs,(struct sockaddr*)&caddress,(socklen_t*)&caddrlen);
                 strcpy(cIP,inet_ntoa(caddress.sin_addr));           //obtengo la IP del cliente
                 sleep(1);                                           //espero para sincronizar
-                if(ihaveport == false){                             //si no recibí antes el comando PORT
+                if(ihadport == false){                             //si no recibí antes el comando PORT
                     tport += 1;                                     //tport = port + 1, me conecto al puerto siguiente
                     if((fhfs = newtransfersock(tport,cIP)) < 0)
                         return -14;
@@ -136,7 +142,7 @@ int main(int argc,char *args[]){
                     //tport ya va a estar seteado por el comando PORT
                     if((fhfs = newtransfersock(tport,cIP)) < 0)
                         return -15;
-                    ihaveport = false;
+                    ihadport = false;
                 }
                 //proceso de enviado del achivo
                 if(sendfile(fhfs,nof) < 0)
@@ -310,17 +316,17 @@ int sendfile(int fhfs,char nof[]){
 return 0;}
 
 char* toip(char buffer[]){
-    short int manyspaces = 0,index = 0;
+    short int manycomas = 0,index = 0;
     char *ip = (char*)malloc(INET_ADDRSTRLEN * sizeof(char));
     if(ip == NULL){
         printf("** fallo la asignacion de dinamic memory para el string **\n");
         return NULL;
     }
     while(true){
-        if(buffer[index] == ' '){
-            if(manyspaces == 3)
+        if(buffer[index] == ','){
+            if(manycomas == 3)
                 break;
-            manyspaces++;
+            manycomas++;
             *(ip + index) = '.';
         }
         else 
@@ -331,11 +337,11 @@ char* toip(char buffer[]){
 return ip;}
 
 int toport(char buffer[]){
-    int port,manyspaces,index,a,b;
-    manyspaces = 0; index = 0; a = 0; b = 0;
+    int port,manycomas,index,a,b;
+    manycomas = 0; index = 0; a = 0; b = 0;
     while(true){    //127 0 0 1 145 61
-        if(manyspaces > 3){
-            if(buffer[index] == ' '){
+        if(manycomas > 3){
+            if(buffer[index] == ','){
                 ++index;
                 b = atoi(buffer+index);
                 break;
@@ -346,8 +352,8 @@ int toport(char buffer[]){
             ++index;
             continue;
         }
-        if(buffer[index] == ' ')
-            ++manyspaces;
+        if(buffer[index] == ',')
+            ++manycomas;
         ++index;
         if(index > BUFFLEN)
             return -1;

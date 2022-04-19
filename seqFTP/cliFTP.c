@@ -16,8 +16,8 @@ int input2cmd(char[]);                      //extrae el comando de lo ingresado 
 int autentication(int);                     //realiza toda la autenticación completa del usuario que quiere acceder
 int newtransfersock(int*,int);              //crea socket de transferencia pero no devuelve al fhfs conectado con el servidor
 int receivefile(int,char[]);
-char* spacing(char[]);                      //devuelve la ip que se le pasa sin los puntos. para comando PORT
-int* calculito(int);                        //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
+char* fromip(char[]);                      //devuelve la ip que se le pasa sin los puntos. para comando PORT
+int* fromport(int);                        //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
 
 int main(int argc,char *args[]){
     if(argc != 3){
@@ -204,7 +204,7 @@ return 0;}
 
 int newtransfersock(int *port,int fhs){
     int fhfs,saddrlen,newport,*forport;
-    char buffer[BUFFLEN] = {0},*spacedip;
+    char buffer[BUFFLEN] = {0},*forip;
     struct sockaddr_in saddress;
     newport = *port + 1;
     saddress.sin_family = AF_INET;
@@ -232,18 +232,26 @@ int newtransfersock(int *port,int fhs){
             printf("\npuerto %d ocupado por lo que cambiamos de puerto.\n",*port + 1);
             printf("nuevo puerto para la conexión es %d.\n",newport);
         #endif
-        spacedip = spacing(inet_ntoa(saddress.sin_addr));
-        forport = calculito(newport);
-        if(spacedip == NULL || forport == NULL){
+        forip = fromip(inet_ntoa(saddress.sin_addr));
+        forport = fromport(newport);
+        if(forip == NULL || forport == NULL){
             printf("** fallo el formateo de la ip o del puerto para el comando PORT **\n");
             return -1;
         }
-        sprintf(buffer,"PORT %s %d %d\r\n",spacedip,*(forport),*(forport+1));
+        sprintf(buffer,"PORT %s,%d,%d\r\n",forip,*(forport),*(forport+1));
         if(write(fhs,buffer,sizeof(buffer)) < 0){
             printf("** fallo el enviado del comando **\n");
             return -1;
         }
-        free(spacedip); free(forport);
+        memset(buffer,0,sizeof(buffer));
+        if(read(fhs,buffer,sizeof(buffer)) < 0){
+            printf("** fallo el enviado del comando **\n");
+            return -1;
+        }
+        #ifdef DEB
+            printf("\n%s\n",buffer);
+        #endif
+        free(forip); free(forport);
     }
     *port = newport;                    //guardo el puerto al que me conecté satisfactoriamente
 return fhfs;}
@@ -276,7 +284,7 @@ int receivefile(int fhfc,char nof[]){
     fclose(archivito);
 return 0;}
 
-char* spacing(char ip[]){
+char* fromip(char ip[]){
     char *ret = (char*)malloc(INET_ADDRSTRLEN * sizeof(char));
     if(ret == NULL){
         printf("** fallo la asignacion de dinamic memory para el string **\n");
@@ -286,12 +294,12 @@ char* spacing(char ip[]){
         if(ip[i] != '.')
             *(ret + i) = ip[i];
         else
-            *(ret + i) = ' ';
+            *(ret + i) = ',';
     }
     *(ret + (INET_ADDRSTRLEN - 1)) = '\0';
 return ret;}
 
-int* calculito(int port){
+int* fromport(int port){
     int *ret = (int*)malloc(2 * sizeof(int));
     if(ret == NULL){
         printf("** fallo la asignacion de dinamic memory para los numeros**\n");

@@ -7,14 +7,15 @@
 #define PORT 74
 
 //CODIGOS DE RESPUESTA DEL SERVIDOR
-#define CONSUC 220              //CONNECTION SUCCESSFULL
+#define CONSUC 220              //CONNECTION SUCCESSFUL
 #define CONFIN 221              //CONNECTION FINISH
-#define LOGSUC 230              //LOG IN SUCCESSFULL
+#define LOGSUC 230              //LOG IN SUCCESSFUL
 #define PASREQ 331              //PASSWORD REQUIRED
-#define LOGUNS 530              //LOG IN UNSUCCESSFULL
+#define LOGUNS 530              //LOG IN UNSUCCESSFUL
 #define FILEFO 299              //FILE FOUND
 #define FILENF 550              //FILE NOT FOUND
-#define TRASUC 226              //TRANSFER SUCCESSFULL
+#define TRASUC 226              //TRANSFER SUCCESSFUL
+#define PRTSUC 220              //PORT COMMAND SUCCESSFUL
 
 //MACROS EXTRA
 #define true 1
