@@ -7,6 +7,7 @@
 #include<sys/types.h>
 #include<fcntl.h>
 #include<errno.h>
+#include<termios.h>
 #include"cmds.h"
 
 #define DIRDESTFILES "cliFiles/"            //DIRECTORIO DONDE SE VAN A ALMACENAR LOS ARCHIVOS TRANSFERIDOS
@@ -110,7 +111,7 @@ int main(int argc,char *args[]){
                 //obtengo código de respuesta del archivo solicitado
                 retcode = atoi(buffer);
                 if(retcode == FILENF){
-                    printf("* archivo no encontrado *\n\n");
+                    printf("\n* archivo no encontrado *\n\n");
                     close(fhfc);
                     continue;
                 }
@@ -163,6 +164,7 @@ return -1;}
 int autentication(int fhs){
     int retcode;
     char input[AUTLEN],buffer[BUFFLEN] = {0};
+    struct termios term;                                    //para ocultar la contraseña
     printf("username: ");
     fgets(input,sizeof(input),stdin);
     strtok(input,"\n");
@@ -181,7 +183,14 @@ int autentication(int fhs){
         printf("\n%s\n",buffer);      
     #endif
     printf("password: ");
+    //proceso de ocultado de escritura de contraseña
+    tcgetattr(fileno(stdin),&term);
+    term.c_lflag &= ~ECHO;
+    tcsetattr(fileno(stdin),0,&term);
     fgets(input,sizeof(input),stdin);
+    term.c_lflag |= ECHO;
+    tcsetattr(fileno(stdin),0,&term);
+    //se continúa
     strtok(input,"\n");
     memset(buffer,0,sizeof(buffer));
     sprintf(buffer,"PASS %s\r\n",input);
@@ -196,10 +205,12 @@ int autentication(int fhs){
     }
     retcode = atoi(buffer);                                 //me quedo con el codigo que devolvió el servidor
     #ifdef DEB
-        printf("\n%s\n",buffer);
+        printf("\n\n%s\n",buffer);
     #endif
-    if(retcode == LOGUNS)
+    if(retcode == LOGUNS){
+        printf("** Datos de login incorrectos. **\n");
         return -1;
+    }
 return 0;}
 
 int newtransfersock(int *port,int fhs){
@@ -258,27 +269,23 @@ return fhfs;}
 
 int receivefile(int fhfc,char nof[]){
     FILE *archivito;
-    int pathlen = sizeof(DIRDESTFILES) + strlen(nof);
+    int pathlen = sizeof(DIRDESTFILES) + strlen(nof),readed,writed;
     char path[pathlen],buffer[FBUFFLEN] = {0};
+    readed = FBUFFLEN;                  //para que entre al while
     sprintf(path,"%s%s",DIRDESTFILES,nof);
     archivito = fopen(path,"wb");
     if(archivito == NULL){
         printf("** no se pudo abrir el archivo **\n");
         return -1;
     }
-    while(true){
+    while(readed == FBUFFLEN){
         fflush(archivito);
         fsync(fhfc);
-        if(read(fhfc,buffer,sizeof(buffer)) < 0){
+        if((readed = read(fhfc,buffer,sizeof(buffer))) < 0){
             printf("** fallo la lectura del archivo en el socket de transferencia **\n");
             return -1;
         }
-        if(strstr(buffer,"-EOF-") != NULL){                    //llegue al fin de archivo
-            strtok(buffer,"-EOF-");
-            fwrite(buffer,sizeof(char),sizeof(char) * strlen(buffer),archivito);
-            break;
-        }
-        fwrite(buffer,sizeof(char),sizeof(char) * strlen(buffer),archivito);
+        writed = fwrite(buffer,sizeof(char),sizeof(char) * readed,archivito);
         memset(buffer,0,sizeof(buffer));
     }
     fclose(archivito);

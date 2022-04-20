@@ -287,7 +287,7 @@ return sz;}
 
 int sendfile(int fhfs,char nof[]){
     FILE *archivito;
-    int pathlen = sizeof(DIRSRCFILES) + strlen(nof),lei,escribo;
+    int pathlen = sizeof(DIRSRCFILES) + strlen(nof),readed,writed;
     char path[pathlen],buffer[FBUFFLEN] = {0};
     sprintf(path,"%s%s",DIRSRCFILES,nof);
     archivito = fopen(path,"rb");
@@ -298,19 +298,13 @@ int sendfile(int fhfs,char nof[]){
     while(!feof(archivito)){
         fflush(archivito);
         fsync(fhfs);
-        lei = fread(buffer,sizeof(char),(size_t)FBUFFLEN,archivito);
-        if((escribo = write(fhfs,buffer,sizeof(char) * strlen(buffer))) < 0){
+        readed = fread(buffer,sizeof(char),(size_t)FBUFFLEN,archivito);
+        if((writed = write(fhfs,buffer,sizeof(char) * readed)) < 0){
             printf("** fallo el enviado del archivo al cliente **\n");
             fclose(archivito);
             return -1;
         }
         memset(buffer,0,sizeof(buffer));
-        //printf("del archivo lei %d y en el socket escribí %d\n",lei,escribo);
-    }
-    if(write(fhfs,"-EOF-",sizeof("-EOF-")) < 0){                  //indico el fin de archivo
-        printf("** fallo el enviado del EOF al cliente **\n");
-        fclose(archivito);
-        return -1;
     }
     fclose(archivito);
 return 0;}
