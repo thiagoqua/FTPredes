@@ -31,7 +31,9 @@ int main(int argc,char *args[]){
     long int filesz;
     struct sockaddr_in caddress;
     char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},*aux;
-    bool ihadport = false;              //si recibo o no el comando PORT
+    bool ihadport,smbdyconn;
+    ihadport = false;               //si recibo o no el comando PORT
+    smbdyconn = false;              //si tengo clientes conectados en un determinado momento
     port = atoi(args[1]);
     //conexion con cliente mediante socket de comandos
     caddress.sin_family = AF_INET;
@@ -55,107 +57,111 @@ int main(int argc,char *args[]){
         printf("** fallo el listen **\n");
         return -5;
     }
-    if((fhc = accept(fhs,(struct sockaddr*)&caddress,(socklen_t*)&caddrlen)) < 0){
-        printf("** fallo el accept **\n");
-        return -6;
-    }
-    port = ntohs(caddress.sin_port);
-    tport = port;
-    //interaccion entre servidor-cliente
-    memset(buffer,0,sizeof(buffer));
-    memset(cmd,0,sizeof(cmd));
-    sprintf(buffer,"%d %s version %s\r\n",CONSUC,args[0],VERSION);
-    if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de bienvenida
-        printf("** fallo el enviado del mensaje de bienvenida **\n");
-        return -7;
-    }
-    if(autentication(fhc) < 0){
-        close(fhs);//esto se tiene que ir
-        return -8;
-    }
-    while(true){                                        //gestion de las peticiones
-        memset(buffer,0,sizeof(buffer));
-        if(read(fhc,buffer,sizeof(buffer)) < 0){
-            printf("** fallo la lectura del comando enviado por el cliente **\n");
-            return -9;
+    while(true){
+        if((fhc = accept(fhs,(struct sockaddr*)&caddress,(socklen_t*)&caddrlen)) < 0){
+            printf("** fallo el accept **\n");
+            return -6;
         }
-        strncpy(cmd,buffer,(size_t)4);
-        switch(buff2cmd(cmd)){
-            case QUIT:
-                memset(buffer,0,sizeof(buffer));
-                sprintf(buffer,"%d Goodbye.\r\n",CONFIN);
-                if(write(fhc,buffer,sizeof(buffer)) < 0){
-                    printf("** fallo el envio de la respuesta al cliente **\n");
-                    return -10;
-                }
-                close(fhc); close(fhs); close(fhfs);
-                return 0;
-            break;
-            case PORT:
-                strtok(buffer,"\r\n");
-                #ifdef DEB
-                    printf("\nrecibido comando PORT con lo siguiente '%s'\n",buffer);
-                #endif
-                aux = toip(buffer+5);               //obtengo la ip
-                tport = toport(buffer+5);           //obtengo el puerto
-                if(aux == NULL || tport < 0){
-                    printf("** fallo la extraccion de la ip o del puerto del comando PORT **\n");
-                    return -11;
-                }
-                strcpy(cIP,aux);
-                free(aux);
-                ihadport = true;
-                memset(buffer,0,sizeof(buffer));
-                sprintf(buffer,"%d PORT command successful\r\n",PRTSUC);
-                if(write(fhc,buffer,sizeof(buffer)) < 0){
-                    printf("** fallo el envio de la respuesta al cliente **\n");
-                    return -10;
-                }
-            break;
-            case RETR:
-                //obtengo nombre de archivo y envio tamaño
-                strcpy(nof,buffer+5);
-                strtok(nof,"\r\n");
-                memset(buffer,0,sizeof(buffer));
-                if((filesz = fsize(nof)) < 0){
-                    sprintf(buffer,"%d %s: no such file or directory\r\n",FILENF,nof);
+        port = ntohs(caddress.sin_port);
+        tport = port;
+        #ifdef DEB
+            printf("\n\e[7mse me conecto un cliente\e[0m\n");
+        #endif
+        smbdyconn = true;
+        //interaccion entre servidor-cliente
+        memset(buffer,0,sizeof(buffer));
+        memset(cmd,0,sizeof(cmd));
+        sprintf(buffer,"%d %s version %s\r\n",CONSUC,args[0],VERSION);
+        if(write(fhc,buffer,sizeof(buffer)) < 0){           //mensaje de bienvenida
+            printf("** fallo el enviado del mensaje de bienvenida **\n");
+            return -7;
+        }
+        if(autentication(fhc) < 0)
+            smbdyconn = false;
+        while(smbdyconn){                                       //gestion de las peticiones
+            memset(buffer,0,sizeof(buffer));
+            if(read(fhc,buffer,sizeof(buffer)) < 0){
+                printf("** fallo la lectura del comando enviado por el cliente **\n");
+                return -9;
+            }
+            strncpy(cmd,buffer,(size_t)4);
+            switch(buff2cmd(cmd)){
+                case QUIT:
+                    memset(buffer,0,sizeof(buffer));
+                    sprintf(buffer,"%d Goodbye.\r\n",CONFIN);
                     if(write(fhc,buffer,sizeof(buffer)) < 0){
                         printf("** fallo el envio de la respuesta al cliente **\n");
-                        return -12;
+                        return -10;
                     }
-                    continue;
-                }
-                sprintf(buffer,"%d file %s size %ld Bytes\r\n",FILEFO,nof,filesz);
-                if(write(fhc,buffer,sizeof(buffer)) < 0){
-                    printf("** fallo el envio de la respuesta al cliente **\n");
-                    return -13;
-                }
-                getsockname(fhfs,(struct sockaddr*)&caddress,(socklen_t*)&caddrlen);
-                strcpy(cIP,inet_ntoa(caddress.sin_addr));           //obtengo la IP del cliente
-                sleep(1);                                           //espero para sincronizar
-                if(ihadport == false){                             //si no recibí antes el comando PORT
-                    tport += 1;                                     //tport = port + 1, me conecto al puerto siguiente
-                    if((fhfs = newtransfersock(tport,cIP)) < 0)
-                        return -14;
-                }
-                else{                                               //si recibi antes el comando PORT
-                    //tport ya va a estar seteado por el comando PORT
-                    if((fhfs = newtransfersock(tport,cIP)) < 0)
-                        return -15;
-                    ihadport = false;
-                }
-                //proceso de enviado del achivo
-                if(sendfile(fhfs,nof) < 0)
-                    return -16;
-                memset(buffer,0,sizeof(buffer));
-                sprintf(buffer,"%d Transfer complete\r\n",TRASUC);
-                if(write(fhc,buffer,sizeof(buffer)) < 0){
-                    printf("** fallo el envio de la respuesta al cliente **\n");
-                    return -17;
-                }
-                close(fhfs);
-                tport = port;
-            break;
+                    close(fhc); close(fhfs);
+                    smbdyconn = false;
+                break;
+                case PORT:
+                    strtok(buffer,"\r\n");
+                    // #ifdef DEB
+                    //     printf("\nrecibido comando PORT con lo siguiente '%s'\n",buffer);
+                    // #endif
+                    aux = toip(buffer+5);               //obtengo la ip del comando PORT
+                    tport = toport(buffer+5);           //obtengo el puerto del comando PORT
+                    if(aux == NULL || tport < 0){
+                        printf("** fallo la extraccion de la ip o del puerto del comando PORT **\n");
+                        return -11;
+                    }
+                    strcpy(cIP,aux);
+                    free(aux);
+                    ihadport = true;
+                    memset(buffer,0,sizeof(buffer));
+                    sprintf(buffer,"%d PORT command successful\r\n",PRTSUC);
+                    if(write(fhc,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo el envio de la respuesta al cliente **\n");
+                        return -10;
+                    }
+                break;
+                case RETR:
+                    //obtengo nombre de archivo y envio tamaño
+                    strcpy(nof,buffer+5);
+                    strtok(nof,"\r\n");
+                    memset(buffer,0,sizeof(buffer));
+                    if((filesz = fsize(nof)) < 0){
+                        sprintf(buffer,"%d %s: no such file or directory\r\n",FILENF,nof);
+                        if(write(fhc,buffer,sizeof(buffer)) < 0){
+                            printf("** fallo el envio de la respuesta al cliente **\n");
+                            return -12;
+                        }
+                        continue;
+                    }
+                    sprintf(buffer,"%d file %s size %ld Bytes\r\n",FILEFO,nof,filesz);
+                    if(write(fhc,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo el envio de la respuesta al cliente **\n");
+                        return -13;
+                    }
+                    getsockname(fhfs,(struct sockaddr*)&caddress,(socklen_t*)&caddrlen);
+                    strcpy(cIP,inet_ntoa(caddress.sin_addr));           //obtengo la IP del cliente
+                    sleep(1);                                           //espero para sincronizar
+                    if(ihadport == false){                              //si no recibí antes el comando PORT
+                        tport += 1;                                     //tport = port + 1, me conecto al puerto siguiente
+                        if((fhfs = newtransfersock(tport,cIP)) < 0)
+                            return -14;
+                    }
+                    else{                                               //si recibi antes el comando PORT
+                        //tport ya va a estar seteado por el comando PORT
+                        if((fhfs = newtransfersock(tport,cIP)) < 0)
+                            return -15;
+                        ihadport = false;
+                    }
+                    //proceso de enviado del achivo
+                    if(sendfile(fhfs,nof) < 0)
+                        return -16;
+                    memset(buffer,0,sizeof(buffer));
+                    sprintf(buffer,"%d Transfer complete\r\n",TRASUC);
+                    if(write(fhc,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo el envio de la respuesta al cliente **\n");
+                        return -17;
+                    }
+                    close(fhfs);
+                    tport = port;
+                break;
+            }
         }
     }
 return 0;}
@@ -227,6 +233,8 @@ int autentication(int fhc){
 return 0;}
 
 int validate(char user[],char pass[]){
+    if(strcmp(user,"null") == 0 || strcmp(pass,"null") == 0)
+        return -1;
     FILE *archivito = fopen(NOFACCESS,"r");
     char read[AUTLEN + 1] = {0},aux[AUTLEN] = {0};
     if(archivito == NULL){

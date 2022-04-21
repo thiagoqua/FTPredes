@@ -168,6 +168,8 @@ int autentication(int fhs){
     printf("username: ");
     fgets(input,sizeof(input),stdin);
     strtok(input,"\n");
+    if(strcmp(input,"\n") == 0)
+        strcpy(input,"null");
     sprintf(buffer,"USER %s\r\n",input);
     if(write(fhs,buffer,sizeof(buffer)) < 0){               //envio usuario al servidor
         printf("** fallo el enviado del comando **\n");
@@ -192,6 +194,8 @@ int autentication(int fhs){
     tcsetattr(fileno(stdin),0,&term);
     //se continúa
     strtok(input,"\n");
+    if(strcmp(input,"\n") == 0)
+        strcpy(input,"null");
     memset(buffer,0,sizeof(buffer));
     sprintf(buffer,"PASS %s\r\n",input);
     if(write(fhs,buffer,sizeof(buffer)) < 0){               //envio contraseña al servidor
@@ -208,7 +212,7 @@ int autentication(int fhs){
         printf("\n\n%s\n",buffer);
     #endif
     if(retcode == LOGUNS){
-        printf("** Datos de login incorrectos. **\n");
+        printf("** datos de login incorrectos **\n");
         return -1;
     }
 return 0;}
@@ -292,18 +296,24 @@ int receivefile(int fhfc,char nof[]){
 return 0;}
 
 char* fromip(char ip[]){
+    int i;
     char *ret = (char*)malloc(INET_ADDRSTRLEN * sizeof(char));
     if(ret == NULL){
         printf("** fallo la asignacion de dinamic memory para el string **\n");
         return NULL;
     }
-    for(int i = 0;ip[i] != '\0';++i){
+    for(i = 0;ip[i] != '\0';++i){
         if(ip[i] != '.')
             *(ret + i) = ip[i];
         else
             *(ret + i) = ',';
     }
-    *(ret + (INET_ADDRSTRLEN - 1)) = '\0';
+    for(i = 0;i < INET_ADDRSTRLEN;++i){
+        if(*(ret + i) == ip[i] || *(ret + i) == ',')
+            continue;
+        else
+            *(ret + i) = '\0';
+    }
 return ret;}
 
 int* fromport(int port){
