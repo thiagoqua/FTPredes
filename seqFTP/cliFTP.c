@@ -5,6 +5,7 @@
 #include<string.h>
 #include<unistd.h>
 #include<sys/types.h>
+#include<sys/stat.h>
 #include<fcntl.h>
 #include<errno.h>
 #include<termios.h>
@@ -20,7 +21,7 @@ int receivefile(int,char[],char[]);
 char* fromip(char[]);                       //devuelve la ip que se le pasa sin los puntos. para comando PORT
 int* fromport(int);                         //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
 int exitconn(int);                          //terminar la conexión mediante comando QUIT
-void newdirdestfiles(char[],char[]);        //devuelve el directorio donde se quieren almacenar los archivos
+void newconcatdir(char[],char[]);        //devuelve el directorio donde se quieren almacenar los archivos
 
 int main(int argc,char *args[]){
     if(argc != 3){
@@ -63,6 +64,9 @@ int main(int argc,char *args[]){
     while(true){                        //se generan y gestionan las peticiones al servidor
         memset(buffer,0,sizeof(buffer));
         memset(input,0,sizeof(input));
+        memset(nod,0,sizeof(nod));
+        memset(nof,0,sizeof(nof));
+        memset(cmd,0,sizeof(cmd));
         printf("operación: ");
         fgets(input,sizeof(input),stdin);
         strtok(input,"\n");
@@ -147,13 +151,13 @@ int main(int argc,char *args[]){
                     break;
                 }
                 strcpy(aux,dirdestfiles);                       //para chequear con aux si existe o no
-                newdirdestfiles(aux,nod);
-                printf("quiero abrir el directorio '%s'\n",aux);
-                if((dir = opendir(aux)) != NULL){      //el directorio existe
+                newconcatdir(aux,nod);
+                if((dir = opendir(aux)) != NULL){       //el directorio existe
                     memset(dirdestfiles,0,sizeof(dirdestfiles));
                     strcpy(dirdestfiles,aux);           //como existe, guardo en la variable la info verdadera
                     if(closedir(dir) < 0)
                         printf("* no se pudo cerrar el directorio *\n");
+                    printf("\nworking directory now is '%s'\n\n",dirdestfiles);
                 }
                 else if(dir == NULL && errno == ENOENT)         //el directorio no existe
                     printf("\n%s: No such file or directory\n\n",nod);
@@ -167,10 +171,26 @@ int main(int argc,char *args[]){
 
             break;
             case MKDIR:
-
+                strcpy(nod,(input+6));                          //obtengo el nombre del directorio
+                strcpy(aux,dirdestfiles);
+                newconcatdir(aux,nod);                          //obtengo el path en el que estoy actualmente parado
+                if(mkdir(aux,0777) < 0)
+                    printf("\n* no se pudo crear el directorio *\n\n");
+                else
+                    printf("\ndirectorio '%s' creado exitosamente!\n\n",aux);
             break;
             case RMDIR:
-
+                strcpy(nod,(input+6));                          //obtengo el nombre del directorio
+                strcpy(aux,dirdestfiles);
+                newconcatdir(aux,nod);                          //obtengo el path en el que estoy actualmente parado
+                if(rmdir(aux) < 0){
+                    if(errno == ENOTEMPTY)
+                        printf("\ndirectorio '%s' no vacío. no se pudo borrar.\n\n",aux);
+                    else
+                        printf("\n* no se pudo borrar el directorio *\n\n");
+                }
+                else
+                    printf("\ndirectorio '%s' borrado exitosamente!\n\n",aux);
             break;
             default:
                 printf("\n* operación incorrecta. reingrese *\n\n");
@@ -378,7 +398,7 @@ int exitconn(int fhs){
     close(fhs);
 return 0;}
 
-void newdirdestfiles(char dirdestfiles[],char nod[]){
+void newconcatdir(char dirdestfiles[],char nod[]){
     int length = strlen(dirdestfiles);
     char aux[length];
     memset(aux,0,sizeof(aux));
