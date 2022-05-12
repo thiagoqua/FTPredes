@@ -9,16 +9,18 @@
 #include<errno.h>
 #include<termios.h>
 #include"cmds.h"
+#include<dirent.h>
 
-#define DIRDESTFILES "cliFiles/"            //DIRECTORIO DONDE SE VAN A ALMACENAR LOS ARCHIVOS TRANSFERIDOS
 #define IP "127.0.0.1"                      //IP PARA EL CANAL DE TRANSFERENCIAS
 
 int input2cmd(char[]);                      //extrae el comando de lo ingresado por el usuario
 int autentication(int);                     //realiza toda la autenticación completa del usuario que quiere acceder
 int newtransfersock(int*,int);              //crea socket de transferencia pero no devuelve al fhfs conectado con el servidor
-int receivefile(int,char[]);
-char* fromip(char[]);                      //devuelve la ip que se le pasa sin los puntos. para comando PORT
-int* fromport(int);                        //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
+int receivefile(int,char[],char[]);
+char* fromip(char[]);                       //devuelve la ip que se le pasa sin los puntos. para comando PORT
+int* fromport(int);                         //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
+int exitconn(int);                          //terminar la conexión mediante comando QUIT
+void newdirdestfiles(char[],char[]);        //devuelve el directorio donde se quieren almacenar los archivos
 
 int main(int argc,char *args[]){
     if(argc != 3){
@@ -27,7 +29,10 @@ int main(int argc,char *args[]){
     }
     int fhs,fhfs,fhfc,port,tport,saddrlen,retcode;
     struct sockaddr_in saddress;
-    char buffer[BUFFLEN] = {0},input[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0};
+    char buffer[BUFFLEN] = {0},input[BUFFLEN] = {0},cmd[6] = {0},nof[NOFLEN] = {0},
+    nod[NODLEN] = {0},dirdestfiles[NODLEN * 3] = {0},aux[NODLEN * 3] = {0};
+    DIR* dir;
+    strcpy(dirdestfiles,"cliFiles/");       //DIRECTORIO DONDE SE VAN A ALMACENAR LOS ARCHIVOS TRANSFERIDOS
     //conexion con servidor mediante socket de comandos
     port = atoi(args[2]);
     saddress.sin_family = AF_INET;
@@ -61,24 +66,13 @@ int main(int argc,char *args[]){
         printf("operación: ");
         fgets(input,sizeof(input),stdin);
         strtok(input,"\n");
-        strncpy(cmd,input,(size_t)4);
+        strncpy(cmd,input,(size_t)5);
         switch(input2cmd(cmd)){
             case QUIT:
-                strcpy(buffer,"QUIT\r\n");
-                if(write(fhs,buffer,sizeof(buffer)) < 0){
-                    printf("** fallo el enviado del comando **\n");
+                if(exitconn(fhs) < 0)
                     return -6;
-                }
-                memset(buffer,0,sizeof(buffer));
-                if(read(fhs,buffer,sizeof(buffer)) < 0){
-                    printf("** fallo en la recepcion de la respuesta del servidor **\n");
-                    return -7;
-                }
-                #ifdef DEB
-                    printf("\n%s\n",buffer);      
-                #endif
-                close(fhs);
-                return 0;
+                else
+                    return 0;
             break;
             case GET:
                 //creo socket de transferencias
@@ -105,7 +99,6 @@ int main(int argc,char *args[]){
                     return -10;
                 }
                 #ifdef DEB
-                    //getsockname(fhfc,(struct sockaddr*)&saddress,(socklen_t*)&saddrlen);
                     printf("\n%s\n",buffer);
                 #endif
                 //obtengo código de respuesta del archivo solicitado
@@ -129,7 +122,7 @@ int main(int argc,char *args[]){
                         printf("servidor con ip '%s' conectado al canal de transferencias.\n\n",inet_ntoa(saddress.sin_addr));
                     #endif
                     //recibo el archivo 
-                    if(receivefile(fhfc,nof) < 0)
+                    if(receivefile(fhfc,nof,dirdestfiles) < 0)
                         return -13;
                     memset(buffer,0,sizeof(buffer));
                     if(read(fhs,buffer,sizeof(buffer)) < 0){
@@ -147,6 +140,38 @@ int main(int argc,char *args[]){
                 }
                 close(fhfs); close(fhfc);
             break;
+            case LCD:
+                strcpy(nod,(input+4));                          //obtengo el nombre del directorio
+                if((strlen(dirdestfiles) + strlen(nod)) > sizeof(dirdestfiles)){
+                    printf("* no podemos movernos otro directorio más *\n");
+                    break;
+                }
+                strcpy(aux,dirdestfiles);                       //para chequear con aux si existe o no
+                newdirdestfiles(aux,nod);
+                printf("quiero abrir el directorio '%s'\n",aux);
+                if((dir = opendir(aux)) != NULL){      //el directorio existe
+                    memset(dirdestfiles,0,sizeof(dirdestfiles));
+                    strcpy(dirdestfiles,aux);           //como existe, guardo en la variable la info verdadera
+                    if(closedir(dir) < 0)
+                        printf("* no se pudo cerrar el directorio *\n");
+                }
+                else if(dir == NULL && errno == ENOENT)         //el directorio no existe
+                    printf("\n%s: No such file or directory\n\n",nod);
+                else{                                           //el opendir falló
+                    printf("** falló el opendir **\n");
+                    exitconn(fhs);
+                    return -16;
+                }
+            break;
+            case DIRLS:
+
+            break;
+            case MKDIR:
+
+            break;
+            case RMDIR:
+
+            break;
             default:
                 printf("\n* operación incorrecta. reingrese *\n\n");
             break;
@@ -155,10 +180,19 @@ int main(int argc,char *args[]){
 return 0;}
 
 int input2cmd(char str[]){
+    strtok(str," ");
     if(strcmp(str,"quit") == 0)
         return QUIT;
-    else if(strcmp(str,"get ") == 0)
+    else if(strcmp(str,"get") == 0)
         return GET;
+    else if(strcmp(str,"lcd") == 0)
+        return LCD;
+    else if(strcmp(str,"dir") == 0)
+        return DIRLS;
+    else if(strcmp(str,"mkdir") == 0)
+        return MKDIR;
+    else if(strcmp(str,"rmdir") == 0)
+        return RMDIR;
 return -1;}
 
 int autentication(int fhs){
@@ -271,12 +305,12 @@ int newtransfersock(int *port,int fhs){
     *port = newport;                    //guardo el puerto al que me conecté satisfactoriamente
 return fhfs;}
 
-int receivefile(int fhfc,char nof[]){
+int receivefile(int fhfc,char nof[],char dirdestfiles[]){
     FILE *archivito;
-    int pathlen = sizeof(DIRDESTFILES) + strlen(nof),readed,writed;
+    int pathlen = strlen(dirdestfiles) + strlen(nof),readed;
     char path[pathlen],buffer[FBUFFLEN] = {0};
     readed = FBUFFLEN;                  //para que entre al while
-    sprintf(path,"%s%s",DIRDESTFILES,nof);
+    sprintf(path,"%s%s",dirdestfiles,nof);
     archivito = fopen(path,"wb");
     if(archivito == NULL){
         printf("** no se pudo abrir el archivo **\n");
@@ -289,7 +323,7 @@ int receivefile(int fhfc,char nof[]){
             printf("** fallo la lectura del archivo en el socket de transferencia **\n");
             return -1;
         }
-        writed = fwrite(buffer,sizeof(char),sizeof(char) * readed,archivito);
+        fwrite(buffer,sizeof(char),sizeof(char) * readed,archivito);
         memset(buffer,0,sizeof(buffer));
     }
     fclose(archivito);
@@ -325,3 +359,30 @@ int* fromport(int port){
     *ret = port / 256;
     *(ret + 1) = port % 256;
 return ret;}
+
+int exitconn(int fhs){
+    char buffer[BUFFLEN] = {0};
+    strcpy(buffer,"QUIT\r\n");
+    if(write(fhs,buffer,sizeof(buffer)) < 0){
+        printf("** fallo el enviado del comando **\n");
+        return -1;
+    }
+    memset(buffer,0,sizeof(buffer));
+    if(read(fhs,buffer,sizeof(buffer)) < 0){
+        printf("** fallo en la recepcion de la respuesta del servidor **\n");
+        return -2;
+    }
+    #ifdef DEB
+        printf("\n%s\n",buffer);      
+    #endif
+    close(fhs);
+return 0;}
+
+void newdirdestfiles(char dirdestfiles[],char nod[]){
+    int length = strlen(dirdestfiles);
+    char aux[length];
+    memset(aux,0,sizeof(aux));
+    strcpy(aux,dirdestfiles);
+    memset(dirdestfiles,0,strlen(dirdestfiles));
+    sprintf(dirdestfiles,"%s%s/",aux,nod);
+}
