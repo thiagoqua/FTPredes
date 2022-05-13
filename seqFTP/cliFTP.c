@@ -15,13 +15,14 @@
 #define IP "127.0.0.1"                      //IP PARA EL CANAL DE TRANSFERENCIAS
 
 int input2cmd(char[]);                      //extrae el comando de lo ingresado por el usuario
+bool validinputarg(char[]);                 //valida el argumento del comando que se ingresa
 int autentication(int);                     //realiza toda la autenticación completa del usuario que quiere acceder
 int newtransfersock(int*,int);              //crea socket de transferencia pero no devuelve al fhfs conectado con el servidor
 int receivefile(int,char[],char[]);
 char* fromip(char[]);                       //devuelve la ip que se le pasa sin los puntos. para comando PORT
 int* fromport(int);                         //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
 int exitconn(int);                          //terminar la conexión mediante comando QUIT
-void concatdir(char[],char[]);           //devuelve el directorio donde se quieren almacenar los archivos
+void concatdir(char[],char[]);              //devuelve el directorio donde se quieren almacenar los archivos
 
 int main(int argc,char *args[]){
     if(argc != 3){
@@ -69,6 +70,7 @@ int main(int argc,char *args[]){
         memset(cmd,0,sizeof(cmd));
         printf("operación: ");
         fgets(input,sizeof(input),stdin);
+        printf("\n");
         strtok(input,"\n");
         strncpy(cmd,input,(size_t)5);
         switch(input2cmd(cmd)){
@@ -79,6 +81,10 @@ int main(int argc,char *args[]){
                     return 0;
             break;
             case GET:
+                if(!validinputarg(input)){          //chequeo si sus argumentos son válidos
+                    printf("* argumento del comando inválido *\n\n");
+                    break;
+                }
                 //creo socket de transferencias
                 tport = port;
                 if((fhfs = newtransfersock(&tport,fhs)) < 0){
@@ -145,6 +151,10 @@ int main(int argc,char *args[]){
                 close(fhfs); close(fhfc);
             break;
             case CD:
+                if(!validinputarg(input)){          //chequeo si sus argumentos son válidos
+                    printf("* argumento del comando inválido *\n\n");
+                    break;
+                }
                 strcpy(nod,(input+3));                          //obtengo el nombre del directorio
                 sprintf(buffer,"CWD %s\r\n",nod);
                 if(write(fhs,buffer,sizeof(buffer)) < 0){
@@ -166,6 +176,10 @@ int main(int argc,char *args[]){
                     printf("* no se pudo cambiar el directorio de trabajo en el servidor *\n\n");
             break;
             case LCD:
+                if(!validinputarg(input)){          //chequeo si sus argumentos son válidos
+                    printf("* argumento del comando inválido *\n\n");
+                    break;
+                }
                 strcpy(nod,(input+4));                          //obtengo el nombre del directorio
                 if((strlen(dirdestfiles) + strlen(nod)) > sizeof(dirdestfiles)){
                     printf("* no podemos movernos otro directorio más *\n");
@@ -177,7 +191,7 @@ int main(int argc,char *args[]){
                     memset(dirdestfiles,0,sizeof(dirdestfiles));
                     strcpy(dirdestfiles,aux);           //como existe, guardo en la variable la info verdadera
                     if(closedir(dir) < 0)
-                    printf("* no se pudo cerrar el directorio *\n");
+                        printf("* no se pudo cerrar el directorio *\n");
                     printf("\nworking directory now is '%s'\n\n",dirdestfiles);
                 }
                 else if(dir == NULL && errno == ENOENT)         //el directorio no existe
@@ -189,16 +203,57 @@ int main(int argc,char *args[]){
                 }
             break;
             case DIRLS:
-
+                strcpy(buffer,"LIST\r\n");
+                if(write(fhs,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo el enviado del comando **\n\n");
+                    return -16;
+                }
+                memset(buffer,0,sizeof(buffer));
+                if(read(fhs,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo la lectura del comando **\n\n");
+                    return -17;
+                }
+                #ifdef DEB
+                    printf("\n%s\n",buffer);
+                #endif
+                memset(buffer,0,sizeof(buffer));
+                do{
+                    if((retcode = read(fhs,buffer,sizeof(buffer))) < 0){
+                        printf("** fallo la lectura de la respuesta del dir **\n\n");
+                        return -18;
+                    }
+                    printf("%s",buffer);
+                    memset(buffer,0,sizeof(buffer));
+                }
+                while(retcode == sizeof(buffer));
+                printf("\n");
             break;
             case MKDIR:
-                
+                //no chequeo argumentos porque en tal caso que estén mal, mkdir vuelve < 0
+                strcpy(nod,(input+6));                          //obtengo el nombre del directorio
+                strcpy(aux,dirdestfiles);
+                concatdir(aux,nod);                             //obtengo el path del directorio a crear
+                if(mkdir(aux,0777) < 0)
+                    printf("\n* no se pudo crear el directorio *\n\n");
+                else
+                    printf("\ndirectorio '%s' creado exitosamente!\n\n",aux);
             break;
             case RMDIR:
-                
+                //no chequeo argumentos porque en tal caso que estén mal, rmdir vuelve < 0
+                strcpy(nod,(input+6));                          //obtengo el nombre del directorio
+                strcpy(aux,dirdestfiles);
+                concatdir(aux,nod);                             //obtengo el path del directorio a borrar
+                if(rmdir(aux) < 0){
+                    if(errno == ENOTEMPTY)
+                    printf("\ndirectorio '%s' no vacío. no se pudo borrar.\n\n",aux);
+                    else
+                    printf("\n* no se pudo borrar el directorio *\n\n");
+                }
+                else
+                    printf("\ndirectorio '%s' borrado exitosamente!\n\n",aux);
             break;
             default:
-                printf("\n* operación incorrecta. reingrese *\n\n");
+                printf("* operación incorrecta. reingrese *\n\n");
             break;
         }
     }
@@ -221,6 +276,21 @@ int input2cmd(char str[]){
     else if(strcmp(str,"rmdir") == 0)
         return RMDIR;
 return -1;}
+
+bool validinputarg(char in[]){
+    int len = strlen(in);
+    bool cmdskipped = false;
+    for(int i = 0;i < len;++i){
+        if(in[i] >= 'a' && in[i] <= 'z' && !cmdskipped)
+            continue;
+        else if(in[i] == ' ' && !cmdskipped){
+            cmdskipped = true;
+            continue;
+        }
+        else if(in[i] >= 'a' && in[i] <= 'z' && cmdskipped)
+            return true;
+    }
+return false;}
 
 int autentication(int fhs){
     int retcode;

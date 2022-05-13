@@ -11,6 +11,7 @@
 #define RMDIR   78
 #define CWD     79
 #define LCD     80
+#define LIST    81
 
 //CODIGOS DE RESPUESTA DEL SERVIDOR
 #define CONSUC 220              //CONNECTION SUCCESSFUL
@@ -23,6 +24,7 @@
 #define TRASUC 226              //TRANSFER SUCCESSFUL
 #define PRTSUC 220              //PORT COMMAND SUCCESSFUL
 #define CWDSUC 250              //CWD COMMAND SUCCESSFUL
+#define DIRSUC 150              //DIR COMMAND SUCCESSFUL
 /* DUDA*/
 #define CWDUNS 567              //CWD COMMAND UNSUCCESSFUL 
 
@@ -33,6 +35,6 @@
 #define FBUFFLEN 512            //longitud del buffer de transferencia de archivo
 #define AUTLEN   20             //longitud de los arreglos de autenticacion
 #define NOFLEN   20             //longitud del nombre del archivo para transferir
-#define NODLEN   20
+#define NODLEN   20             //longitud del nombre del directorio a crear, borrar o moverse         
 
 typedef short int bool;

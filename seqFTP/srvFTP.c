@@ -34,6 +34,7 @@ int main(int argc,char *args[]){
     char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},*aux,nod[NODLEN],
     dirsrcfiles[NODLEN * 3] = {0};
     bool ihadport,smbdyconn;
+    FILE* sh;
     DIR* dir;
     ihadport = false;               //si recibo o no el comando PORT
     smbdyconn = false;              //si tengo clientes conectados en un determinado momento
@@ -107,7 +108,7 @@ int main(int argc,char *args[]){
                     tport = toport(buffer+5);           //obtengo el puerto del comando PORT
                     if(aux == NULL || tport < 0){
                         printf("** fallo la extraccion de la ip o del puerto del comando PORT **\n");
-                        return -11;
+                        return -10;
                     }
                     strcpy(cIP,aux);
                     free(aux);
@@ -116,7 +117,7 @@ int main(int argc,char *args[]){
                     sprintf(buffer,"%d PORT command successful\r\n",PRTSUC);
                     if(write(fhc,buffer,sizeof(buffer)) < 0){
                         printf("** fallo el envio de la respuesta al cliente **\n");
-                        return -10;
+                        return -11;
                     }
                 break;
                 case RETR:
@@ -200,8 +201,43 @@ int main(int argc,char *args[]){
                     }
                     else{                                           //el opendir falló
                         printf("** falló el opendir **\n");
-                        return -16;
+                        return -21;
                     }
+                    free(aux);
+                break;
+                case LIST:
+                    memset(buffer,0,sizeof(buffer));
+                    sprintf(buffer,"%d File listing follows in ASCII mode\r\n",DIRSUC);
+                    if(write(fhc,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo el envio de la respuesta al ccomando dir **\n");
+                        return -22;
+                    }
+                    aux = (char*)malloc((strlen(dirsrcfiles) + 5) * sizeof(char));
+                    if(aux == NULL){
+                        printf("** fallo el malloc del dir **\n\n");
+                        return -23;
+                    }
+                    sprintf(aux,"ls %s",dirsrcfiles);           //para que me ejecute el ls en el current work directory
+                    memset(buffer,0,sizeof(buffer));
+                    sh = popen(aux,"r");
+                    if(sh == NULL){
+                        printf("* no se pudo ejecutar el comando en sh *\n\n");
+                        return -24;
+                    }
+                    while(!feof(sh)){
+                        memset(buffer,0,sizeof(buffer));
+                        //uso caddrlen para reutilizar variables
+                        caddrlen = fread(buffer,sizeof(char),sizeof(buffer),sh);
+                        if(strcmp(buffer,"\0") == 0){
+                            strcpy(buffer,"- directory is empty\n");
+                            caddrlen = strlen(buffer);
+                        }
+                        if(write(fhc,buffer,(size_t)caddrlen) < 0){
+                            printf("** fallo el envio de la respuesta al comando dir **\n");
+                            return -25;
+                        }
+                    }
+                    fclose(sh);
                     free(aux);
                 break;
             }
@@ -223,6 +259,8 @@ int buff2cmd(char str[]){
         return PORT;
     else if(strcmp(str,"CWD") == 0)
         return CWD;
+    else if(strcmp(str,"LIST") == 0)
+        return LIST;
 return -1;}
 
 int autentication(int fhc){
