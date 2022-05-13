@@ -5,10 +5,12 @@
 #define GET     72
 #define RETR    73
 #define PORT    74
-#define LCD     75
+#define CD      75
 #define DIRLS   76
 #define MKDIR   77
 #define RMDIR   78
+#define CWD     79
+#define LCD     80
 
 //CODIGOS DE RESPUESTA DEL SERVIDOR
 #define CONSUC 220              //CONNECTION SUCCESSFUL
@@ -20,6 +22,9 @@
 #define FILENF 550              //FILE NOT FOUND
 #define TRASUC 226              //TRANSFER SUCCESSFUL
 #define PRTSUC 220              //PORT COMMAND SUCCESSFUL
+#define CWDSUC 250              //CWD COMMAND SUCCESSFUL
+/* DUDA*/
+#define CWDUNS 567              //CWD COMMAND UNSUCCESSFUL 
 
 //MACROS EXTRA
 #define true     1

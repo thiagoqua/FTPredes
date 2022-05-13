@@ -6,21 +6,22 @@
 #include<unistd.h>
 #include<errno.h>
 #include<string.h>
+#include<dirent.h>
 #include"cmds.h"
 
 #define VERSION     "1.0"
-#define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS
-#define DIRSRCFILES "srvFiles/"                 //DIRECTORIO DONDE ESTAN LOS ARCHIVOS PARA TRANSFERIR      
+#define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS     
 #define IP "127.0.0.5"                          //IP PARA EL CANAL DE COMANDOS
 
 int buff2cmd(char[]);                           //extrae el comando del buffer escrito
 int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
 int validate(char[],char[]);                    //valida que el user y la psw estén en el archivo de acceso
 int newtransfersock(int,char[]);                //crea socket de transferencia y devuelve el fhfc ya conectado al cliente
-long int fsize(char[]);                         //deuelve el tamaño del archivo solicitado
-int sendfile(int,char[]);                       //envia el archivo
+long int fsize(char[],char[]);                  //deuelve el tamaño del archivo solicitado
+int sendfile(int,char[],char[]);                //envia el archivo
 char* toip(char[]);                             //obtiene la ip del buffer cuando llega el comando port
 int toport(char[]);                             //obtiene los numeros para calcular el puerto del buffer
+void concatdir(char[],char[]);
 
 int main(int argc,char *args[]){
     if(argc != 2){
@@ -30,8 +31,10 @@ int main(int argc,char *args[]){
     int fhs,fhc,fhfs,caddrlen,port,tport;
     long int filesz;
     struct sockaddr_in caddress;
-    char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},*aux;
+    char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},*aux,nod[NODLEN],
+    dirsrcfiles[NODLEN * 3] = {0};
     bool ihadport,smbdyconn;
+    DIR* dir;
     ihadport = false;               //si recibo o no el comando PORT
     smbdyconn = false;              //si tengo clientes conectados en un determinado momento
     port = atoi(args[1]);
@@ -62,6 +65,8 @@ int main(int argc,char *args[]){
             printf("** fallo el accept **\n");
             return -6;
         }
+        memset(dirsrcfiles,0,sizeof(dirsrcfiles));
+        strcpy(dirsrcfiles,"srvFiles/");            //directorio de trabajo para pasar los archivos
         port = ntohs(caddress.sin_port);
         tport = port;
         #ifdef DEB
@@ -98,9 +103,6 @@ int main(int argc,char *args[]){
                 break;
                 case PORT:
                     strtok(buffer,"\r\n");
-                    // #ifdef DEB
-                    //     printf("\nrecibido comando PORT con lo siguiente '%s'\n",buffer);
-                    // #endif
                     aux = toip(buffer+5);               //obtengo la ip del comando PORT
                     tport = toport(buffer+5);           //obtengo el puerto del comando PORT
                     if(aux == NULL || tport < 0){
@@ -122,7 +124,7 @@ int main(int argc,char *args[]){
                     strcpy(nof,buffer+5);
                     strtok(nof,"\r\n");
                     memset(buffer,0,sizeof(buffer));
-                    if((filesz = fsize(nof)) < 0){
+                    if((filesz = fsize(nof,dirsrcfiles)) < 0){
                         sprintf(buffer,"%d %s: no such file or directory\r\n",FILENF,nof);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
@@ -150,7 +152,7 @@ int main(int argc,char *args[]){
                         ihadport = false;
                     }
                     //proceso de enviado del achivo
-                    if(sendfile(fhfs,nof) < 0)
+                    if(sendfile(fhfs,nof,dirsrcfiles) < 0)
                         return -16;
                     memset(buffer,0,sizeof(buffer));
                     sprintf(buffer,"%d Transfer complete\r\n",TRASUC);
@@ -161,12 +163,54 @@ int main(int argc,char *args[]){
                     close(fhfs);
                     tport = port;
                 break;
+                case CWD:
+                    memset(nod,0,sizeof(nod));
+                    strcpy(nod,(buffer+4));                          //obtengo el nombre del directorio
+                    strtok(nod,"\r\n");
+                    if((strlen(dirsrcfiles) + strlen(nod) + 1) > sizeof(dirsrcfiles)){
+                        //LE AVISO AL CLIENTE QUE NO PUEDO CREAR EL DIRECTORIO 
+                        break;
+                    }
+                    aux = (char*)malloc(sizeof(dirsrcfiles) * sizeof(char) + 1);
+                    if(aux == NULL){
+                        printf("** fallo el malloc del CWD **\n\n");
+                        return -18;
+                    }
+                    strcpy(aux,dirsrcfiles);                        //para chequear con aux si existe o no
+                    concatdir(aux,nod);
+                    if((dir = opendir(aux)) != NULL){               //el directorio existe
+                        memset(dirsrcfiles,0,sizeof(dirsrcfiles));
+                        strcpy(dirsrcfiles,aux);                    //como existe, guardo en la variable la info verdadera
+                        if(closedir(dir) < 0)
+                            printf("* no se pudo cerrar el directorio *\n");
+                        memset(buffer,0,sizeof(buffer));
+                        sprintf(buffer,"%d CWD command successful\r\n",CWDSUC);
+                        if(write(fhc,buffer,sizeof(buffer)) < 0){
+                            printf("** fallo el envio de la respuesta al cliente **\n");
+                            return -19;
+                        }
+                    }
+                    else if(dir == NULL && errno == ENOENT){         //el directorio no existe
+                        memset(buffer,0,sizeof(buffer));
+                        sprintf(buffer,"%d CWD command unsuccessful\r\n",CWDUNS);
+                        if(write(fhc,buffer,sizeof(buffer)) < 0){
+                            printf("** fallo el envio de la respuesta al cliente **\n");
+                            return -20;
+                        }
+                    }
+                    else{                                           //el opendir falló
+                        printf("** falló el opendir **\n");
+                        return -16;
+                    }
+                    free(aux);
+                break;
             }
         }
     }
 return 0;}
 
 int buff2cmd(char str[]){
+    strtok(str," ");
     if(strcmp(str,"USER") == 0)
         return USER;
     else if(strcmp(str,"PASS") == 0)
@@ -177,6 +221,8 @@ int buff2cmd(char str[]){
         return RETR;
     else if(strcmp(str,"PORT") == 0)
         return PORT;
+    else if(strcmp(str,"CWD") == 0)
+        return CWD;
 return -1;}
 
 int autentication(int fhc){
@@ -279,12 +325,12 @@ int newtransfersock(int port,char ip[]){
     #endif
 return fhfs;}
 
-long int fsize(char nof[]){
+long int fsize(char nof[],char dirsrcfiles[]){
     FILE *archivito;
-    int pathlen = strlen(DIRSRCFILES) + strlen(nof);
+    int pathlen = strlen(dirsrcfiles) + strlen(nof);
     char path[pathlen];
     long int sz;
-    sprintf(path,"%s%s",DIRSRCFILES,nof);
+    sprintf(path,"%s%s",dirsrcfiles,nof);
     archivito = fopen(path,"r");
     if(archivito == NULL)
         return -1;
@@ -293,11 +339,11 @@ long int fsize(char nof[]){
     fclose(archivito);
 return sz;}
 
-int sendfile(int fhfs,char nof[]){
+int sendfile(int fhfs,char nof[],char dirsrcfiles[]){
     FILE *archivito;
-    int pathlen = sizeof(DIRSRCFILES) + strlen(nof),readed,writed;
+    int pathlen = strlen(dirsrcfiles) + strlen(nof),readed,writed;
     char path[pathlen],buffer[FBUFFLEN] = {0};
-    sprintf(path,"%s%s",DIRSRCFILES,nof);
+    sprintf(path,"%s%s",dirsrcfiles,nof);
     archivito = fopen(path,"rb");
     if(archivito == NULL){
         printf("** no se pudo abrir el archivo **\n");
@@ -362,3 +408,12 @@ int toport(char buffer[]){
     }
     port = (a * 256) + b;
 return port;}
+
+void concatdir(char dirsrcfiles[],char nod[]){
+    int length = strlen(dirsrcfiles);
+    char aux[length];
+    memset(aux,0,sizeof(aux));
+    strcpy(aux,dirsrcfiles);
+    memset(dirsrcfiles,0,strlen(dirsrcfiles));
+    sprintf(dirsrcfiles,"%s%s/",aux,nod);
+}
