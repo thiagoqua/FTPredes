@@ -68,7 +68,7 @@ int main(int argc,char *args[]){
         memset(nod,0,sizeof(nod));
         memset(nof,0,sizeof(nof));
         memset(cmd,0,sizeof(cmd));
-        printf("operación: ");
+        printf("\noperación: ");
         fgets(input,sizeof(input),stdin);
         printf("\n");
         strtok(input,"\n");
@@ -287,7 +287,7 @@ bool validinputarg(char in[]){
             cmdskipped = true;
             continue;
         }
-        else if(in[i] >= 'a' && in[i] <= 'z' && cmdskipped)
+        else if(in[i] != ' ' && in[i] != '\0' && in[i] != '\n'  && cmdskipped)
             return true;
     }
 return false;}
