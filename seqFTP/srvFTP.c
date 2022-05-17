@@ -169,7 +169,12 @@ int main(int argc,char *args[]){
                     strcpy(nod,(buffer+4));                          //obtengo el nombre del directorio
                     strtok(nod,"\r\n");
                     if((strlen(dirsrcfiles) + strlen(nod) + 1) > sizeof(dirsrcfiles)){
-                        //LE AVISO AL CLIENTE QUE NO PUEDO CREAR EL DIRECTORIO 
+                        memset(buffer,0,sizeof(buffer));
+                        sprintf(buffer,"%d CWD command failed\r\n",CWDUNS);
+                        if(write(fhc,buffer,sizeof(buffer)) < 0){
+                            printf("** fallo el envio de la respuesta al cliente **\n");
+                            return -17;
+                        }
                         break;
                     }
                     aux = (char*)malloc(sizeof(dirsrcfiles) * sizeof(char) + 1);
@@ -193,7 +198,7 @@ int main(int argc,char *args[]){
                     }
                     else if(dir == NULL && errno == ENOENT){         //el directorio no existe
                         memset(buffer,0,sizeof(buffer));
-                        sprintf(buffer,"%d CWD command unsuccessful\r\n",CWDUNS);
+                        sprintf(buffer,"%d no directory\r\n",FILENF);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
                             return -20;
