@@ -4,8 +4,6 @@
 #include<netinet/in.h>
 #include<string.h>
 #include<unistd.h>
-#include<sys/types.h>
-#include<sys/stat.h>
 #include<fcntl.h>
 #include<errno.h>
 #include<termios.h>
@@ -22,7 +20,6 @@ int receivefile(int,char[],char[]);
 char* fromip(char[]);                       //devuelve la ip que se le pasa sin los puntos. para comando PORT
 int* fromport(int);                         //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
 int exitconn(int);                          //terminar la conexión mediante comando QUIT
-void concatdir(char[],char[]);              //devuelve el directorio donde se quieren almacenar los archivos
 
 int main(int argc,char *args[]){
     if(argc != 3){
@@ -216,6 +213,7 @@ int main(int argc,char *args[]){
                 #ifdef DEB
                     printf("\n%s\n",buffer);
                 #endif
+                //recibo el comando 
                 memset(buffer,0,sizeof(buffer));
                 do{
                     if((retcode = read(fhs,buffer,sizeof(buffer))) < 0){
@@ -229,14 +227,20 @@ int main(int argc,char *args[]){
                 printf("\n");
             break;
             case MKDIR:
-                //no chequeo argumentos porque en tal caso que estén mal, mkdir vuelve < 0
                 strcpy(nod,(input+6));                          //obtengo el nombre del directorio
-                strcpy(aux,dirdestfiles);
-                concatdir(aux,nod);                             //obtengo el path del directorio a crear
-                if(mkdir(aux,0777) < 0)
-                    printf("\n* no se pudo crear el directorio *\n\n");
-                else
-                    printf("\ndirectorio '%s' creado exitosamente!\n\n",aux);
+                sprintf(buffer,"MKD %s\r\n",nod);
+                if(write(fhs,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo el enviado del comando **\n\n");
+                    return -19;
+                }
+                memset(buffer,0,sizeof(buffer));
+                if(read(fhs,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo la lectura del comando **\n\n");
+                    return -17;
+                }
+                #ifdef DEB
+                    printf("\n%s\n",buffer);
+                #endif
             break;
             case RMDIR:
                 //no chequeo argumentos porque en tal caso que estén mal, rmdir vuelve < 0
@@ -474,12 +478,3 @@ int exitconn(int fhs){
     #endif
     close(fhs);
 return 0;}
-
-void concatdir(char dirdestfiles[],char nod[]){
-    int length = strlen(dirdestfiles);
-    char aux[length];
-    memset(aux,0,sizeof(aux));
-    strcpy(aux,dirdestfiles);
-    memset(dirdestfiles,0,strlen(dirdestfiles));
-    sprintf(dirdestfiles,"%s%s/",aux,nod);
-}

@@ -12,6 +12,8 @@
 #define CWD     79
 #define LCD     80
 #define LIST    81
+#define MKD     82
+#define RMD     83
 
 //CODIGOS DE RESPUESTA DEL SERVIDOR
 #define CONSUC 220              //CONNECTION SUCCESSFUL
@@ -24,7 +26,10 @@
 #define TRASUC 226              //TRANSFER SUCCESSFUL
 #define PRTSUC 220              //PORT COMMAND SUCCESSFUL
 #define CWDSUC 250              //CWD COMMAND SUCCESSFUL
-#define DIRSUC 150              //DIR COMMAND SUCCESSFUL
+#define DIRSUC 125              //DIR COMMAND SUCCESSFUL
+#define DIRCOM 250              //DIR COMPLETED
+#define MKDSUC 257              //MKDIR COMMAND SUCCESSFUL
+#define MKDUNS 557              //MKDIR COMMAND UNSUCCESSFUL
 /* DUDA*/
 #define CWDUNS 567              //CWD COMMAND UNSUCCESSFUL 
 
@@ -38,3 +43,17 @@
 #define NODLEN   20             //longitud del nombre del directorio a crear, borrar o moverse         
 
 typedef short int bool;
+
+//FUNCIONES COMPARTIDAS ENTRE CLIENTE Y SERVIDOR
+
+void concatdir(char[],char[]);  //concatena los dos strings (que son directorios) formando el nuevo path
+
+void concatdir(char dirfiles[],char nod[]){
+    int length = strlen(dirfiles);
+    printf("length = %d\n",length);
+    char aux[length];
+    memset(aux,0,sizeof(aux));
+    strcpy(aux,dirfiles);
+    memset(dirfiles,0,strlen(dirfiles));
+    sprintf(dirfiles,"%s%s/",aux,nod);
+}

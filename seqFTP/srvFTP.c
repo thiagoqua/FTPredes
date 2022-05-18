@@ -7,6 +7,8 @@
 #include<errno.h>
 #include<string.h>
 #include<dirent.h>
+#include<sys/types.h>
+#include<sys/stat.h>
 #include"cmds.h"
 
 #define VERSION     "1.0"
@@ -21,7 +23,6 @@ long int fsize(char[],char[]);                  //deuelve el tamaño del archivo
 int sendfile(int,char[],char[]);                //envia el archivo
 char* toip(char[]);                             //obtiene la ip del buffer cuando llega el comando port
 int toport(char[]);                             //obtiene los numeros para calcular el puerto del buffer
-void concatdir(char[],char[]);
 
 int main(int argc,char *args[]){
     if(argc != 2){
@@ -168,6 +169,7 @@ int main(int argc,char *args[]){
                     memset(nod,0,sizeof(nod));
                     strcpy(nod,(buffer+4));                          //obtengo el nombre del directorio
                     strtok(nod,"\r\n");
+                    printf("nod = '%s'\n",nod);
                     if((strlen(dirsrcfiles) + strlen(nod) + 1) > sizeof(dirsrcfiles)){
                         memset(buffer,0,sizeof(buffer));
                         sprintf(buffer,"%d CWD command failed\r\n",CWDUNS);
@@ -211,6 +213,7 @@ int main(int argc,char *args[]){
                     free(aux);
                 break;
                 case LIST:
+                    printf("pwd = '%s'\n",dirsrcfiles);
                     memset(buffer,0,sizeof(buffer));
                     sprintf(buffer,"%d File listing follows in ASCII mode\r\n",DIRSUC);
                     if(write(fhc,buffer,sizeof(buffer)) < 0){
@@ -222,7 +225,7 @@ int main(int argc,char *args[]){
                         printf("** fallo el malloc del dir **\n\n");
                         return -23;
                     }
-                    sprintf(aux,"ls %s",dirsrcfiles);           //para que me ejecute el ls en el current work directory
+                    sprintf(aux,"ls -l %s",dirsrcfiles);            //para que me ejecute el ls en el current work directory
                     memset(buffer,0,sizeof(buffer));
                     sh = popen(aux,"r");
                     if(sh == NULL){
@@ -233,17 +236,52 @@ int main(int argc,char *args[]){
                         memset(buffer,0,sizeof(buffer));
                         //uso caddrlen para reutilizar variables
                         caddrlen = fread(buffer,sizeof(char),sizeof(buffer),sh);
-                        if(strcmp(buffer,"\0") == 0){
-                            strcpy(buffer,"- directory is empty\n");
-                            caddrlen = strlen(buffer);
-                        }
                         if(write(fhc,buffer,(size_t)caddrlen) < 0){
                             printf("** fallo el envio de la respuesta al comando dir **\n");
                             return -25;
                         }
                     }
+                    memset(buffer,0,sizeof(buffer));
+                    sprintf(buffer,"\n%d list completed successfully.\r\n",DIRCOM);
+                    if(write(fhc,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo el envio de la respuesta al comando dir **\n");
+                        return -25;
+                    }
                     fclose(sh);
                     free(aux);
+                break;
+                case MKD:
+                    memset(nod,0,sizeof(nod));
+                    strcpy(nod,buffer+4);                           //obtengo el nombre del directorio a crear
+                    strtok(nod,"\r\n");
+                    printf("nod = '%s'\n",nod);
+                    aux = (char*)malloc(sizeof(dirsrcfiles));
+                    if(aux == NULL){
+                        printf("** fallo el malloc del MKD **\n\n");
+                        return -26;
+                    }
+                    strcpy(aux,dirsrcfiles);
+                    concatdir(aux,nod);                             //obtengo el path del directorio a crear
+                    printf("aux = '%s'\n",aux);
+                    memset(buffer,0,sizeof(buffer));
+                    if(mkdir(aux,0777) < 0){                        //no se pudo crear el directorio
+                        sprintf(buffer,"%d '%s' creation failed\r\n",MKDUNS,aux);
+                        if(write(fhc,buffer,sizeof(buffer)) < 0){
+                            printf("** fallo el envio de la respuesta al cliente **\n");
+                            return -20;
+                        }
+                    }
+                    else{
+                        sprintf(buffer,"%d '%s' created successfuly\r\n",MKDSUC,aux);
+                        if(write(fhc,buffer,sizeof(buffer)) < 0){
+                            printf("** fallo el envio de la respuesta al cliente **\n");
+                            return -20;
+                        }
+                    }
+                    free(aux);
+                break;
+                case RMD:
+
                 break;
             }
         }
@@ -266,6 +304,10 @@ int buff2cmd(char str[]){
         return CWD;
     else if(strcmp(str,"LIST") == 0)
         return LIST;
+    else if(strcmp(str,"MKD") == 0)
+        return MKD;
+    else if(strcmp(str,"RMD") == 0)
+        return RMD;
 return -1;}
 
 int autentication(int fhc){
@@ -451,12 +493,3 @@ int toport(char buffer[]){
     }
     port = (a * 256) + b;
 return port;}
-
-void concatdir(char dirsrcfiles[],char nod[]){
-    int length = strlen(dirsrcfiles);
-    char aux[length];
-    memset(aux,0,sizeof(aux));
-    strcpy(aux,dirsrcfiles);
-    memset(dirsrcfiles,0,strlen(dirsrcfiles));
-    sprintf(dirsrcfiles,"%s%s/",aux,nod);
-}
