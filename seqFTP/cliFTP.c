@@ -87,7 +87,7 @@ int main(int argc,char *args[]){
                 tport = port;
                 if((fhfs = newtransfersock(&tport,fhs)) < 0){
                     printf("** no se pudo crear el canal de transferencias **\n");
-                    return -8;
+                    return -7;
                 }
                 saddress.sin_family = AF_INET;
                 saddress.sin_addr.s_addr = inet_addr(IP);
@@ -99,12 +99,12 @@ int main(int argc,char *args[]){
                 sprintf(buffer,"RETR %s\r\n",nof);
                 if(write(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el enviado del comando **\n");
-                    return -9;
+                    return -8;
                 }
                 memset(buffer,0,sizeof(buffer));
                 if(read(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo en la recepcion de la respuesta del servidor **\n");
-                    return -10;
+                    return -9;
                 }
                 #ifdef DEB
                     printf("\n%s\n",buffer);
@@ -120,22 +120,22 @@ int main(int argc,char *args[]){
                     //acepto al servidor en el socket de transferencias
                     if(listen(fhfs,3) < 0){
                         printf("** fallo el listen **\n");
-                        return -11;
+                        return -10;
                     }
                     if((fhfc = accept(fhfs,(struct sockaddr*)&saddress,((socklen_t*)&saddrlen))) < 0){
                         printf("** fallo el accept **\n");
-                        return -12;
+                        return -11;
                     }
                     #ifdef DEB
                         printf("servidor con ip '%s' conectado al canal de transferencias.\n\n",inet_ntoa(saddress.sin_addr));
                     #endif
                     //recibo el archivo 
                     if(receivefile(fhfc,nof,dirdestfiles) < 0)
-                        return -13;
+                        return -12;
                     memset(buffer,0,sizeof(buffer));
                     if(read(fhs,buffer,sizeof(buffer)) < 0){
                         printf("** fallo en la recepcion de la respuesta del servidor **\n");
-                        return -14;
+                        return -13;
                     }
                     #ifdef DEB
                         printf("%s\n",buffer);
@@ -144,7 +144,7 @@ int main(int argc,char *args[]){
                 else{
                     printf("** codigo de retorno del servidor inválido **\n");
                     close(fhfs); close(fhfc);
-                    return -15;
+                    return -14;
                 }
                 close(fhfs); close(fhfc);
             break;
@@ -157,12 +157,12 @@ int main(int argc,char *args[]){
                 sprintf(buffer,"CWD %s\r\n",nod);
                 if(write(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el enviado del comando **\n\n");
-                    return -16;
+                    return -15;
                 }
                 memset(buffer,0,sizeof(buffer));
                 if(read(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo la lectura del comando **\n\n");
-                    return -17;
+                    return -16;
                 }
                 #ifdef DEB
                     printf("\n%s\n",buffer);
@@ -197,19 +197,19 @@ int main(int argc,char *args[]){
                 else{                                           //el opendir falló
                     printf("** falló el opendir **\n");
                     exitconn(fhs);
-                    return -16;
+                    return -17;
                 }
             break;
             case DIRLS:
                 strcpy(buffer,"LIST\r\n");
                 if(write(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el enviado del comando **\n\n");
-                    return -16;
+                    return -18;
                 }
                 memset(buffer,0,sizeof(buffer));
                 if(read(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo la lectura del comando **\n\n");
-                    return -17;
+                    return -19;
                 }
                 #ifdef DEB
                     printf("\n%s\n",buffer);
@@ -220,7 +220,7 @@ int main(int argc,char *args[]){
                 do{
                     if((readed = read(fhs,buffer,sizeof(buffer))) < 0){
                         printf("** fallo la lectura de la respuesta del dir **\n\n");
-                        return -18;
+                        return -20;
                     }
                     printf("%s",buffer);
                     if(strstr(buffer,"250") != NULL)
@@ -231,7 +231,7 @@ int main(int argc,char *args[]){
                 if(retcode != DIRCOM){                          //tengo que leer el mensaje de respuesta
                     if(read(fhs,buffer,sizeof(buffer)) < 0){
                         printf("** fallo la lectura del comando **\n\n");
-                        return -19;
+                        return -21;
                     }
                     #ifdef DEB
                         printf("\n%s\n",buffer);
@@ -244,12 +244,12 @@ int main(int argc,char *args[]){
                 sprintf(buffer,"MKD %s\r\n",nod);
                 if(write(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo el enviado del comando **\n\n");
-                    return -19;
+                    return -22;
                 }
                 memset(buffer,0,sizeof(buffer));
                 if(read(fhs,buffer,sizeof(buffer)) < 0){
                     printf("** fallo la lectura del comando **\n\n");
-                    return -17;
+                    return -23;
                 }
                 #ifdef DEB
                     printf("\n%s\n",buffer);
@@ -258,16 +258,19 @@ int main(int argc,char *args[]){
             case RMDIR:
                 //no chequeo argumentos porque en tal caso que estén mal, rmdir vuelve < 0
                 strcpy(nod,(input+6));                          //obtengo el nombre del directorio
-                strcpy(aux,dirdestfiles);
-                concatdir(aux,nod);                             //obtengo el path del directorio a borrar
-                if(rmdir(aux) < 0){
-                    if(errno == ENOTEMPTY)
-                    printf("\ndirectorio '%s' no vacío. no se pudo borrar.\n\n",aux);
-                    else
-                    printf("\n* no se pudo borrar el directorio *\n\n");
+                sprintf(buffer,"RMD %s\r\n",nod);
+                if(write(fhs,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo el enviado del comando **\n\n");
+                    return -24;
                 }
-                else
-                    printf("\ndirectorio '%s' borrado exitosamente!\n\n",aux);
+                memset(buffer,0,sizeof(buffer));
+                if(read(fhs,buffer,sizeof(buffer)) < 0){
+                    printf("** fallo la lectura del comando **\n\n");
+                    return -25;
+                }
+                #ifdef DEB
+                    printf("\n%s\n",buffer);
+                #endif
             break;
             default:
                 printf("* operación incorrecta. reingrese *\n\n");

@@ -30,6 +30,8 @@
 #define DIRCOM 250              //DIR COMPLETED
 #define MKDSUC 257              //MKDIR COMMAND SUCCESSFUL
 #define MKDUNS 557              //MKDIR COMMAND UNSUCCESSFUL
+#define RMDSUC 250              //RMDIR COMMAND SUCCESSFUL
+#define RMDUNS 551              //RMDIR COMMAND UNSUCCESSFUL
 /* DUDA*/
 #define CWDUNS 567              //CWD COMMAND UNSUCCESSFUL 
 
@@ -44,19 +46,4 @@
 
 typedef short int bool;
 
-<<<<<<< Updated upstream
 //FUNCIONES COMPARTIDAS ENTRE CLIENTE Y SERVIDOR
-=======
-//FUNCIONES COMPARTIDAS ENTRE CLIENTE Y SERVIDOR
-
-void concatdir(char[],char[]);  //concatena los dos strings (que son directorios) formando el nuevo path
-
-void concatdir(char dirfiles[],char nod[]){
-    int length = strlen(dirfiles);
-    char aux[length];
-    memset(aux,0,sizeof(aux));
-    strcpy(aux,dirfiles);
-    memset(dirfiles,0,strlen(dirfiles));
-    sprintf(dirfiles,"%s%s/",aux,nod);
-}
->>>>>>> Stashed changes

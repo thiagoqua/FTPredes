@@ -12,7 +12,8 @@
 #include"cmds.h"
 
 #define VERSION     "1.0"
-#define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS     
+#define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS
+#define DFDIRSRC "srvFiles/"                 //DIRECTORIO DEFAULT EN EL QUE ESTÁN ALMACENADOS LOS ARCHIVOS
 #define IP "127.0.0.5"                          //IP PARA EL CANAL DE COMANDOS
 
 int buff2cmd(char[]);                           //extrae el comando del buffer escrito
@@ -23,7 +24,8 @@ long int fsize(char[],char[]);                  //deuelve el tamaño del archivo
 int sendfile(int,char[],char[]);                //envia el archivo
 char* toip(char[]);                             //obtiene la ip del buffer cuando llega el comando port
 int toport(char[]);                             //obtiene los numeros para calcular el puerto del buffer
-char* concatdir(char[],char[]);                 //concatena los dos strings (que son directorios) formando el nuevo path
+char* nextdir(char[],char[]);                   //concatena los dos strings (que son directorios) formando el nuevo path
+char* prevdir(char[]);                          //devuelve el directorio padre del que se le pasa
 
 int main(int argc,char *args[]){
     if(argc != 2){
@@ -31,6 +33,7 @@ int main(int argc,char *args[]){
         return -1;
     }
     int fhs,fhc,fhfs,caddrlen,port,tport;
+    const int dfdirsrclen = strlen(DFDIRSRC);
     long int filesz;
     struct sockaddr_in caddress;
     char buffer[BUFFLEN] = {0},cmd[5] = {0},nof[NOFLEN] = {0},cIP[16] = {0},*aux,nod[NODLEN],
@@ -69,7 +72,7 @@ int main(int argc,char *args[]){
             return -6;
         }
         memset(dirsrcfiles,0,sizeof(dirsrcfiles));
-        strcpy(dirsrcfiles,"srvFiles/");            //directorio de trabajo para pasar los archivos
+        strcpy(dirsrcfiles,DFDIRSRC);            //directorio de trabajo para pasar los archivos
         port = ntohs(caddress.sin_port);
         tport = port;
         #ifdef DEB
@@ -90,7 +93,7 @@ int main(int argc,char *args[]){
             memset(buffer,0,sizeof(buffer));
             if(read(fhc,buffer,sizeof(buffer)) < 0){
                 printf("** fallo la lectura del comando enviado por el cliente **\n");
-                return -9;
+                return -8;
             }
             strncpy(cmd,buffer,(size_t)4);
             switch(buff2cmd(cmd)){
@@ -99,7 +102,7 @@ int main(int argc,char *args[]){
                     sprintf(buffer,"%d Goodbye.\r\n",CONFIN);
                     if(write(fhc,buffer,sizeof(buffer)) < 0){
                         printf("** fallo el envio de la respuesta al cliente **\n");
-                        return -10;
+                        return -9;
                     }
                     close(fhc); close(fhfs);
                     smbdyconn = false;
@@ -170,27 +173,50 @@ int main(int argc,char *args[]){
                     memset(nod,0,sizeof(nod));
                     strcpy(nod,(buffer+4));                          //obtengo el nombre del directorio
                     strtok(nod,"\r\n");
-                    printf("nod = '%s'\n",nod);
                     if((strlen(dirsrcfiles) + strlen(nod) + 1) > sizeof(dirsrcfiles)){
                         memset(buffer,0,sizeof(buffer));
                         sprintf(buffer,"%d CWD command failed\r\n",CWDUNS);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
-                            return -17;
+                            return -18;
                         }
                         break;
                     }
-                    aux = concatdir(dirsrcfiles,nod);               //para chequear con aux si existe o no
+                    if(strcmp(nod,"..") == 0){
+                        if(strlen(dirsrcfiles) == dfdirsrclen){
+                            memset(buffer,0,sizeof(buffer));
+                            sprintf(buffer,"%d CWD command failed\r\n",CWDUNS);
+                            if(write(fhc,buffer,sizeof(buffer)) < 0){
+                                printf("** fallo el envio de la respuesta al cliente **\n");
+                                return -19;
+                            }
+                            break;
+                        }
+                        aux = prevdir(dirsrcfiles);
+                    }
+                    else
+                        aux = nextdir(dirsrcfiles,nod);             //para chequear con aux si existe o no
+                    if(aux == NULL){
+                        printf("** fallo el malloc **\n\n");
+                        return -20;
+                    }
                     if((dir = opendir(aux)) != NULL){               //el directorio existe
                         memset(dirsrcfiles,0,sizeof(dirsrcfiles));
                         strcpy(dirsrcfiles,aux);                    //como existe, guardo en la variable la info verdadera
-                        if(closedir(dir) < 0)
+                        if(closedir(dir) < 0){
                             printf("* no se pudo cerrar el directorio *\n");
+                            memset(buffer,0,sizeof(buffer));
+                            sprintf(buffer,"%d CWD command failed\r\n",CWDUNS);
+                            if(write(fhc,buffer,sizeof(buffer)) < 0){
+                                printf("** fallo el envio de la respuesta al cliente **\n");
+                                return -21;
+                            }
+                        }
                         memset(buffer,0,sizeof(buffer));
                         sprintf(buffer,"%d CWD command successful\r\n",CWDSUC);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
-                            return -19;
+                            return -22;
                         }
                     }
                     else if(dir == NULL && errno == ENOENT){         //el directorio no existe
@@ -198,34 +224,33 @@ int main(int argc,char *args[]){
                         sprintf(buffer,"%d no directory\r\n",FILENF);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
-                            return -20;
+                            return -23;
                         }
                     }
                     else{                                           //el opendir falló
                         printf("** falló el opendir **\n");
-                        return -21;
+                        return -24;
                     }
                     free(aux);
                 break;
                 case LIST:
-                    printf("pwd = '%s'\n",dirsrcfiles);
                     memset(buffer,0,sizeof(buffer));
                     sprintf(buffer,"%d File listing follows in ASCII mode\r\n",DIRSUC);
                     if(write(fhc,buffer,sizeof(buffer)) < 0){
                         printf("** fallo el envio de la respuesta al ccomando dir **\n");
-                        return -22;
+                        return -25;
                     }
                     aux = (char*)malloc((strlen(dirsrcfiles) + 5) * sizeof(char));
                     if(aux == NULL){
                         printf("** fallo el malloc del dir **\n\n");
-                        return -23;
+                        return -26;
                     }
                     sprintf(aux,"ls -l %s",dirsrcfiles);            //para que me ejecute el ls en el current work directory
                     memset(buffer,0,sizeof(buffer));
                     sh = popen(aux,"r");
                     if(sh == NULL){
                         printf("* no se pudo ejecutar el comando en sh *\n\n");
-                        return -24;
+                        return -27;
                     }
                     while(!feof(sh)){
                         memset(buffer,0,sizeof(buffer));
@@ -233,14 +258,14 @@ int main(int argc,char *args[]){
                         caddrlen = fread(buffer,sizeof(char),sizeof(buffer),sh);
                         if(write(fhc,buffer,(size_t)caddrlen) < 0){
                             printf("** fallo el envio de la respuesta al comando dir **\n");
-                            return -25;
+                            return -28;
                         }
                     }
                     memset(buffer,0,sizeof(buffer));
                     sprintf(buffer,"\n%d list completed successfully.\r\n",DIRCOM);
                     if(write(fhc,buffer,sizeof(buffer)) < 0){
                         printf("** fallo el envio de la respuesta al comando dir **\n");
-                        return -25;
+                        return -29;
                     }
                     fclose(sh);
                     free(aux);
@@ -252,29 +277,57 @@ int main(int argc,char *args[]){
                     aux = (char*)malloc((strlen(dirsrcfiles) + strlen(nod)) * sizeof(char));
                     if(aux == NULL){
                         printf("** fallo el malloc del MKD **\n\n");
-                        return -26;
+                        return -30;
                     }                             
                     sprintf(aux,"%s%s/",dirsrcfiles,nod);           //obtengo el path del directorio a crear
-                    printf("aux = '%s'\n",aux);
                     memset(buffer,0,sizeof(buffer));
                     if(mkdir(aux,0777) < 0){                        //no se pudo crear el directorio
                         sprintf(buffer,"%d '%s' creation failed\r\n",MKDUNS,nod);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
-                            return -20;
+                            return -31;
                         }
                     }
                     else{
                         sprintf(buffer,"%d '%s' created successfuly\r\n",MKDSUC,nod);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
-                            return -20;
+                            return -32;
                         }
                     }
                     free(aux);
                 break;
                 case RMD:
-
+                    memset(nod,0,sizeof(nod));
+                    strcpy(nod,buffer+4);                           //obtengo el nombre del directorio a borrar
+                    strtok(nod,"\r\n");
+                    aux = (char*)malloc((strlen(dirsrcfiles) + strlen(nod)) * sizeof(char));
+                    if(aux == NULL){
+                        printf("** fallo el malloc del RMD **\n\n");
+                        return -33;
+                    }                             
+                    sprintf(aux,"%s%s/",dirsrcfiles,nod);           //obtengo el path del directorio a crear
+                    printf("aux = '%s'\n",aux);
+                    memset(buffer,0,sizeof(buffer));
+                    if(rmdir(aux) < 0){                             //no se pudo crear el directorio
+                        memset(buffer,0,sizeof(buffer));
+                        if(errno = ENOENT)                          //porque el directorio no existe
+                            sprintf(buffer,"%d '%s' no directory\r\n",FILENF,nod);
+                        else                                        //por otra razón
+                            sprintf(buffer,"%d '%s' deletion failed\r\n",RMDUNS,nod);
+                        if(write(fhc,buffer,sizeof(buffer)) < 0){
+                            printf("** fallo el envio de la respuesta al cliente **\n");
+                            return -34;
+                        }
+                    }
+                    else{
+                        sprintf(buffer,"%d '%s' deleted successfuly\r\n",RMDSUC,nod);
+                        if(write(fhc,buffer,sizeof(buffer)) < 0){
+                            printf("** fallo el envio de la respuesta al cliente **\n");
+                            return -35;
+                        }
+                    }
+                    free(aux);
                 break;
             }
         }
@@ -487,12 +540,28 @@ int toport(char buffer[]){
     port = (a * 256) + b;
 return port;}
 
-char* concatdir(char dirfiles[],char nod[]){
-    printf("me llego '%s' y '%s'\n",dirfiles,nod);
+char* nextdir(char dirfiles[],char nod[]){
     int length = strlen(dirfiles) + strlen(nod) + 1;
     char *aux = (char*)malloc(length * sizeof(char));
     if(aux == NULL)
         return aux;
     sprintf(aux,"%s%s/",dirfiles,nod);
-    printf("sale '%s'\n",aux);
 return aux;}
+
+char* prevdir(char dirfiles[]){
+    int prevchars,len,totalmax,i;
+    char *path;
+    prevchars = 0;
+    len = strlen(dirfiles) - 1;
+    for(i = len - 1;dirfiles[i] != '/';--i,++prevchars) {};
+    ++prevchars;
+    totalmax = len - prevchars;
+    path = (char*)malloc((strlen(dirfiles) - prevchars) * sizeof(char));
+    if(path == NULL)
+        return path;
+    for(i = 0;i < totalmax;++i){
+        *(path + i) = dirfiles[i];
+    }
+    *(path + i) = '/';
+    *(path + i + 1) = '\0';
+return path;}
