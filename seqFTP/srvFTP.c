@@ -249,8 +249,12 @@ int main(int argc,char *args[]){
                     memset(nod,0,sizeof(nod));
                     strcpy(nod,buffer+4);                           //obtengo el nombre del directorio a crear
                     strtok(nod,"\r\n");
-                    printf("nod = '%s'\n",nod);
-                    aux = concatdir(dirsrcfiles,nod);               //obtengo el path del directorio a crear
+                    aux = (char*)malloc((strlen(dirsrcfiles) + strlen(nod)) * sizeof(char));
+                    if(aux == NULL){
+                        printf("** fallo el malloc del MKD **\n\n");
+                        return -26;
+                    }                             
+                    sprintf(aux,"%s%s/",dirsrcfiles,nod);           //obtengo el path del directorio a crear
                     printf("aux = '%s'\n",aux);
                     memset(buffer,0,sizeof(buffer));
                     if(mkdir(aux,0777) < 0){                        //no se pudo crear el directorio

@@ -27,7 +27,7 @@ int main(int argc,char *args[]){
         printf("** cantidad de argumentos incorrecta **\n");
         return -1;
     }
-    int fhs,fhfs,fhfc,port,tport,saddrlen,retcode;
+    int fhs,fhfs,fhfc,port,tport,saddrlen,retcode,readed;
     struct sockaddr_in saddress;
     char buffer[BUFFLEN] = {0},input[BUFFLEN] = {0},cmd[6] = {0},nof[NOFLEN] = {0},
     nod[NODLEN] = {0},dirdestfiles[NODLEN * 3] = {0},aux[NODLEN * 3] = {0};
@@ -216,15 +216,27 @@ int main(int argc,char *args[]){
                 #endif
                 //recibo el comando 
                 memset(buffer,0,sizeof(buffer));
+                retcode = 0;
                 do{
-                    if((retcode = read(fhs,buffer,sizeof(buffer))) < 0){
+                    if((readed = read(fhs,buffer,sizeof(buffer))) < 0){
                         printf("** fallo la lectura de la respuesta del dir **\n\n");
                         return -18;
                     }
                     printf("%s",buffer);
+                    if(strstr(buffer,"250") != NULL)
+                        retcode = DIRCOM;
                     memset(buffer,0,sizeof(buffer));
                 }
-                while(retcode == sizeof(buffer));
+                while(readed == sizeof(buffer));
+                if(retcode != DIRCOM){                          //tengo que leer el mensaje de respuesta
+                    if(read(fhs,buffer,sizeof(buffer)) < 0){
+                        printf("** fallo la lectura del comando **\n\n");
+                        return -19;
+                    }
+                    #ifdef DEB
+                        printf("\n%s\n",buffer);
+                    #endif
+                }
                 printf("\n");
             break;
             case MKDIR:

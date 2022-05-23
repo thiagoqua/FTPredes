@@ -44,4 +44,19 @@
 
 typedef short int bool;
 
+<<<<<<< Updated upstream
 //FUNCIONES COMPARTIDAS ENTRE CLIENTE Y SERVIDOR
+=======
+//FUNCIONES COMPARTIDAS ENTRE CLIENTE Y SERVIDOR
+
+void concatdir(char[],char[]);  //concatena los dos strings (que son directorios) formando el nuevo path
+
+void concatdir(char dirfiles[],char nod[]){
+    int length = strlen(dirfiles);
+    char aux[length];
+    memset(aux,0,sizeof(aux));
+    strcpy(aux,dirfiles);
+    memset(dirfiles,0,strlen(dirfiles));
+    sprintf(dirfiles,"%s%s/",aux,nod);
+}
+>>>>>>> Stashed changes
