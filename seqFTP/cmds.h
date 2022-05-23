@@ -45,15 +45,3 @@
 typedef short int bool;
 
 //FUNCIONES COMPARTIDAS ENTRE CLIENTE Y SERVIDOR
-
-void concatdir(char[],char[]);  //concatena los dos strings (que son directorios) formando el nuevo path
-
-void concatdir(char dirfiles[],char nod[]){
-    int length = strlen(dirfiles);
-    printf("length = %d\n",length);
-    char aux[length];
-    memset(aux,0,sizeof(aux));
-    strcpy(aux,dirfiles);
-    memset(dirfiles,0,strlen(dirfiles));
-    sprintf(dirfiles,"%s%s/",aux,nod);
-}

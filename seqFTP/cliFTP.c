@@ -20,6 +20,7 @@ int receivefile(int,char[],char[]);
 char* fromip(char[]);                       //devuelve la ip que se le pasa sin los puntos. para comando PORT
 int* fromport(int);                         //devuelve los numeros a usar para que el sirvor calcule el puerto tras comando PORT.
 int exitconn(int);                          //terminar la conexión mediante comando QUIT
+void concatdir(char[],char[]);              //concatena los dos strings (que son directorios) formando el nuevo path
 
 int main(int argc,char *args[]){
     if(argc != 3){
@@ -478,3 +479,14 @@ int exitconn(int fhs){
     #endif
     close(fhs);
 return 0;}
+
+void concatdir(char dirfiles[],char nod[]){
+    printf("me llego '%s' y '%s'\n",dirfiles,nod);
+    int length = strlen(dirfiles);
+    char aux[length];
+    memset(aux,0,sizeof(aux));
+    strcpy(aux,dirfiles);
+    memset(dirfiles,0,strlen(dirfiles));
+    sprintf(dirfiles,"%s%s/",aux,nod);
+    printf("sale '%s'\n",dirfiles);
+}

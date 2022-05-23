@@ -23,6 +23,7 @@ long int fsize(char[],char[]);                  //deuelve el tamaño del archivo
 int sendfile(int,char[],char[]);                //envia el archivo
 char* toip(char[]);                             //obtiene la ip del buffer cuando llega el comando port
 int toport(char[]);                             //obtiene los numeros para calcular el puerto del buffer
+char* concatdir(char[],char[]);                 //concatena los dos strings (que son directorios) formando el nuevo path
 
 int main(int argc,char *args[]){
     if(argc != 2){
@@ -179,13 +180,7 @@ int main(int argc,char *args[]){
                         }
                         break;
                     }
-                    aux = (char*)malloc(sizeof(dirsrcfiles) * sizeof(char) + 1);
-                    if(aux == NULL){
-                        printf("** fallo el malloc del CWD **\n\n");
-                        return -18;
-                    }
-                    strcpy(aux,dirsrcfiles);                        //para chequear con aux si existe o no
-                    concatdir(aux,nod);
+                    aux = concatdir(dirsrcfiles,nod);               //para chequear con aux si existe o no
                     if((dir = opendir(aux)) != NULL){               //el directorio existe
                         memset(dirsrcfiles,0,sizeof(dirsrcfiles));
                         strcpy(dirsrcfiles,aux);                    //como existe, guardo en la variable la info verdadera
@@ -255,24 +250,18 @@ int main(int argc,char *args[]){
                     strcpy(nod,buffer+4);                           //obtengo el nombre del directorio a crear
                     strtok(nod,"\r\n");
                     printf("nod = '%s'\n",nod);
-                    aux = (char*)malloc(sizeof(dirsrcfiles));
-                    if(aux == NULL){
-                        printf("** fallo el malloc del MKD **\n\n");
-                        return -26;
-                    }
-                    strcpy(aux,dirsrcfiles);
-                    concatdir(aux,nod);                             //obtengo el path del directorio a crear
+                    aux = concatdir(dirsrcfiles,nod);               //obtengo el path del directorio a crear
                     printf("aux = '%s'\n",aux);
                     memset(buffer,0,sizeof(buffer));
                     if(mkdir(aux,0777) < 0){                        //no se pudo crear el directorio
-                        sprintf(buffer,"%d '%s' creation failed\r\n",MKDUNS,aux);
+                        sprintf(buffer,"%d '%s' creation failed\r\n",MKDUNS,nod);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
                             return -20;
                         }
                     }
                     else{
-                        sprintf(buffer,"%d '%s' created successfuly\r\n",MKDSUC,aux);
+                        sprintf(buffer,"%d '%s' created successfuly\r\n",MKDSUC,nod);
                         if(write(fhc,buffer,sizeof(buffer)) < 0){
                             printf("** fallo el envio de la respuesta al cliente **\n");
                             return -20;
@@ -493,3 +482,13 @@ int toport(char buffer[]){
     }
     port = (a * 256) + b;
 return port;}
+
+char* concatdir(char dirfiles[],char nod[]){
+    printf("me llego '%s' y '%s'\n",dirfiles,nod);
+    int length = strlen(dirfiles) + strlen(nod) + 1;
+    char *aux = (char*)malloc(length * sizeof(char));
+    if(aux == NULL)
+        return aux;
+    sprintf(aux,"%s%s/",dirfiles,nod);
+    printf("sale '%s'\n",aux);
+return aux;}
