@@ -13,8 +13,8 @@
 
 #define VERSION     "1.0"
 #define NOFACCESS   "accesses/ftpusers.txt"     //NAME OF FILE ACCESS
-#define DFDIRSRC "srvFiles/"                 //DIRECTORIO DEFAULT EN EL QUE ESTÁN ALMACENADOS LOS ARCHIVOS
-#define IP "127.0.0.5"                          //IP PARA EL CANAL DE COMANDOS
+#define DFDIRSRC "srvFiles/"                    //DIRECTORIO DEFAULT EN EL QUE ESTÁN ALMACENADOS LOS ARCHIVOS
+#define IP "127.0.0.1"                          //IP PARA EL CANAL DE COMANDOS
 
 int buff2cmd(char[]);                           //extrae el comando del buffer escrito
 int autentication(int);                         //realiza toda la autenticación completa del usuario que quiere acceder
