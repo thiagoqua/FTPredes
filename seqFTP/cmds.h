@@ -45,5 +45,3 @@
 #define NODLEN   20             //longitud del nombre del directorio a crear, borrar o moverse         
 
 typedef short int bool;
-
-//FUNCIONES COMPARTIDAS ENTRE CLIENTE Y SERVIDOR
